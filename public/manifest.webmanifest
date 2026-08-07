@@ -1,0 +1,9 @@
+﻿{
+  "name": "Agente Guia",
+  "short_name": "Agente Guia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffdf8",
+  "theme_color": "#002752",
+  "icons": []
+}
