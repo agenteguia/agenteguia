@@ -17,6 +17,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
 
@@ -66,6 +67,23 @@ export default function App() {
     if (result.error) return showNotice(`Não foi possível salvar: ${result.error.message}`, 'error');
     setModal(false); setEditingRecord(null); showNotice(`${page.slice(0, -1)} ${editingRecord ? 'atualizado' : 'salvo'} com sucesso.`); await loadData();
   }
+
+  async function deleteRecord(record) {
+    if (!supabase) return showNotice('Configure as credenciais do Supabase no arquivo .env.', 'error');
+    setDeleteTarget(record);
+  }
+
+  async function confirmDelete() {
+    if (!supabase || !deleteTarget) return;
+    setLoading(true);
+    const table = page === 'Empresas' ? 'empresas' : page === 'Locais' ? 'locais' : 'categorias';
+    const result = await supabase.from(table).delete().eq('id', deleteTarget.id);
+    setLoading(false);
+    setDeleteTarget(null);
+    if (result.error) return showNotice(`Não foi possível excluir: ${result.error.message}`, 'error');
+    showNotice(`${page.slice(0, -1)} excluído com sucesso.`);
+    await loadData();
+  }
   if (!session) return <Login onError={(message) => showNotice(message, 'error')} />;
   const [title, subtitle] = titles[page];
   const activeCompanies = data.empresas.filter((x) => x.status === 'ativo').length;
@@ -76,17 +94,22 @@ export default function App() {
     <aside className={menuOpen ? 'sidebar open' : 'sidebar'}><div className="brand"><div className="brand-mark">✦</div><div><strong>Agente Guia</strong><small>Painel de gestão</small></div><button className="close" onClick={() => setMenuOpen(false)}>×</button></div><nav>{nav.map(([name, icon]) => <button className={page === name ? 'nav-item active' : 'nav-item'} key={name} onClick={() => { setPage(name); setMenuOpen(false); setSearch(''); }}><i>{icon}</i>{name}</button>)}</nav><div className="sidebar-bottom"><div className="profile"><div className="avatar">VG</div><div><b>{session.user.email?.split('@')[0] || 'Administrador'}</b><small>Administrador</small></div></div><button className="logout" onClick={() => supabase.auth.signOut()}>↪ Sair</button></div></aside>
     <main><header><button className="menu-button" onClick={() => setMenuOpen(true)}>☰</button><div className="crumb">Gestão <span>/</span> {page}</div><div className="header-actions"><button className="help">?</button><button className="avatar">VG</button></div></header><section className="content"><div className="title-row"><div><h1>{title}</h1><p>{subtitle}</p></div><button className="primary" onClick={() => { setEditingRecord(null); setModal(true); }}>＋ Nova {page.slice(0, -1)}</button></div>
       <div className="stats">{page === 'Empresas' && <><Stat value={data.empresas.length} label="Empresas cadastradas"/><Stat value={activeCompanies} label="Empresas ativas"/><Stat value={pendingCompanies} label="Aguardando aprovação"/></>}{page === 'Locais' && <><Stat value={data.locais.length} label="Locais cadastrados"/><Stat value={activePlaces} label="Locais ativos"/><Stat value={publicPlaces} label="Pontos públicos"/></>}{page === 'Categorias' && <><Stat value={data.categorias.length} label="Categorias"/><Stat value={data.locais.length} label="Locais organizados"/></>}</div>
-      <section className="panel"><div className="panel-top"><div className="search"><span>⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Buscar ${page.toLowerCase()}...`} /></div><button className="filter">☷ <span>Filtros</span></button></div><DataTable page={page} rows={rows} loading={loading} onEdit={(record) => { setEditingRecord(record); setModal(true); }} /></section>
+      <section className="panel"><div className="panel-top"><div className="search"><span>⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Buscar ${page.toLowerCase()}...`} /></div><button className="filter">☷ <span>Filtros</span></button></div><DataTable page={page} rows={rows} loading={loading} onEdit={(record) => { setEditingRecord(record); setModal(true); }} onDelete={(record) => deleteRecord(record)} /></section>
     </section></main>
     {modal && <Editor page={page} categories={data.categorias} companies={data.empresas} loading={loading} record={editingRecord} close={() => { setModal(false); setEditingRecord(null); }} save={saveRecord} />}
+    {deleteTarget && <DeleteConfirmModal item={deleteTarget} page={page} loading={loading} cancel={() => setDeleteTarget(null)} confirm={confirmDelete} />}
     {notice && <div className={`toast ${notice.type === 'error' ? 'toast-error' : ''}`}>{notice.type === 'error' ? '!' : '✓'} {notice.message}</div>}
   </div>;
 }
 
-function DataTable({ page, rows, loading, onEdit }) {
-  if (page === 'Categorias') return rows.length ? <div className="category-grid">{rows.map((x) => <article className="category-card" key={x.id}><div className="category-icon">{x.icone || '◇'}</div><div><b>{x.nome}</b><p>Ordem de exibição: {x.ordem}</p></div><button onClick={() => onEdit(x)}>•••</button></article>)}</div> : <div className="empty">{loading ? 'Carregando dados...' : 'Ainda não há categorias cadastradas.'}</div>;
+function DataTable({ page, rows, loading, onEdit, onDelete }) {
+  if (page === 'Categorias') return rows.length ? <div className="category-grid">{rows.map((x) => <article className="category-card" key={x.id}><div className="category-icon">{x.icone || '◇'}</div><div><b>{x.nome}</b><p>Ordem de exibição: {x.ordem}</p></div><div className="row-actions"><button type="button" className="icon-button edit" onClick={() => onEdit(x)} title="Editar"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button><button type="button" className="icon-button delete" onClick={() => onDelete(x)} title="Excluir"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6v14h12V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div></article>)}</div> : <div className="empty">{loading ? 'Carregando dados...' : 'Ainda não há categorias cadastradas.'}</div>;
   const company = page === 'Empresas';
-  return <div className="table-wrap"><table><thead><tr>{(company ? ['Empresa', 'Categoria', 'Responsável', 'Contato', 'Status', ''] : ['Local', 'Categoria', 'Vinculado a', 'Endereço', 'Status', '']).map((x) => <th key={x}>{x}</th>)}</tr></thead><tbody>{rows.map((x) => <tr key={x.id}><td><b>{x.nome_fantasia || x.nome}</b>{company && <small>{x.cnpj}</small>}</td><td><span className="pill">{x.categoria?.nome || 'Sem categoria'}</span></td><td>{company ? x.responsavel_nome : x.empresa?.nome_fantasia || 'Ponto público'}</td><td>{company ? x.telefone : x.endereco}</td><td>{company ? <Status value={x.status} /> : <Status value={x.ativo ? 'ativo' : 'inativo'} />}</td><td><button className="more" onClick={() => onEdit(x)}>•••</button></td></tr>)}</tbody></table>{!rows.length && <div className="empty">{loading ? 'Carregando dados...' : 'Nenhum resultado encontrado.'}</div>}</div>;
+  return <div className="table-wrap"><table><thead><tr>{(company ? ['Empresa', 'Categoria', 'Responsável', 'Contato', 'Status', ''] : ['Local', 'Categoria', 'Vinculado a', 'Endereço', 'Status', '']).map((x) => <th key={x}>{x}</th>)}</tr></thead><tbody>{rows.map((x) => <tr key={x.id}><td><b>{x.nome_fantasia || x.nome}</b>{company && <small>{x.cnpj}</small>}</td><td><span className="pill">{x.categoria?.nome || 'Sem categoria'}</span></td><td>{company ? x.responsavel_nome : x.empresa?.nome_fantasia || 'Ponto público'}</td><td>{company ? x.telefone : x.endereco}</td><td>{company ? <Status value={x.status} /> : <Status value={x.ativo ? 'ativo' : 'inativo'} />}</td><td><div className="row-actions"><button type="button" className="icon-button edit" onClick={() => onEdit(x)} title="Editar"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button><button type="button" className="icon-button delete" onClick={() => onDelete(x)} title="Excluir"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6v14h12V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div></td></tr>)}</tbody></table>{!rows.length && <div className="empty">{loading ? 'Carregando dados...' : 'Nenhum resultado encontrado.'}</div>}</div>;
+}
+
+function DeleteConfirmModal({ item, page, loading, cancel, confirm }) {
+  return <div className="modal-layer"><div className="modal confirm-modal"><div className="modal-header"><div><h2>Confirmar exclusão</h2><p>Deseja realmente excluir este {page.slice(0, -1).toLowerCase()}?</p></div><button type="button" onClick={cancel}>×</button></div><div className="confirm-content"><p><strong>{item.nome || item.nome_fantasia || 'Registro'}</strong></p><p className="confirm-note">Esta ação não pode ser desfeita.</p></div><div className="confirm-actions"><button type="button" className="secondary" onClick={cancel} disabled={loading}>Cancelar</button><button type="button" className="primary" onClick={confirm} disabled={loading}>{loading ? 'Excluindo...' : 'Excluir'}</button></div></div></div>;
 }
 
 function Editor({ page, categories, companies, record, close, save, loading }) {
