@@ -824,6 +824,45 @@ function PhotoPreview({ src, alt, cover = false, removable = false, onRemove, on
   );
 }
 
+const weekDays = [
+  ["seg", "Seg"],
+  ["ter", "Ter"],
+  ["qua", "Qua"],
+  ["qui", "Qui"],
+  ["sex", "Sex"],
+  ["sab", "Sáb"],
+  ["dom", "Dom"],
+];
+
+function initialSchedule(value) {
+  if (!value) return [{ days: [], start: "09:00", end: "18:00" }];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+  } catch {
+    return [{ days: [], start: "", end: "", legacy: value }];
+  }
+  return [{ days: [], start: "09:00", end: "18:00" }];
+}
+
+function ScheduleEditor({ value, onChange }) {
+  const [schedule, setSchedule] = useState(() => initialSchedule(value));
+  const update = (next) => {
+    setSchedule(next);
+    onChange(JSON.stringify(next));
+  };
+  const toggleDay = (rowIndex, day) => update(schedule.map((row, index) => index === rowIndex ? { ...row, days: row.days.includes(day) ? row.days.filter((item) => item !== day) : [...row.days, day] } : row));
+  const updateTime = (rowIndex, field, time) => update(schedule.map((row, index) => index === rowIndex ? { ...row, [field]: time } : row));
+  return <div className="schedule-editor full">
+    <span className="schedule-label">HORÁRIO</span>
+    {schedule.map((row, rowIndex) => <div className="schedule-row" key={rowIndex}>
+      <div className="day-list">{weekDays.map(([key, label]) => <button type="button" key={key} className={row.days.includes(key) ? "day-button selected" : "day-button"} onClick={() => toggleDay(rowIndex, key)}>{label}</button>)}</div>
+      <div className="time-list"><label><input type="time" value={row.start} onChange={(event) => updateTime(rowIndex, "start", event.target.value)} /><span>◷</span></label><em>até</em><label><input type="time" value={row.end} onChange={(event) => updateTime(rowIndex, "end", event.target.value)} /><span>◷</span></label></div>
+    </div>)}
+    <button type="button" className="add-schedule" onClick={() => update([...schedule, { days: [], start: "09:00", end: "18:00" }])}>+ adicionar outro horário (ex: sábado diferente)</button>
+  </div>;
+}
+
 function Editor({
   page,
   categories,
@@ -840,6 +879,7 @@ function Editor({
   const [coverFile, setCoverFile] = useState(null);
   const [extraFiles, setExtraFiles] = useState([]);
   const [deletedPhotoIds, setDeletedPhotoIds] = useState([]);
+  const [scheduleValue, setScheduleValue] = useState(record?.horario_funcionamento || "");
   const [formValues, setFormValues] = useState({});
   const [expandedImage, setExpandedImage] = useState(null);
 
@@ -861,6 +901,7 @@ function Editor({
     values._coverFile = coverFile;
     values._extraFiles = extraFiles;
     values._deletedPhotoIds = deletedPhotoIds;
+    values.horario_funcionamento = scheduleValue;
     save(values);
   };
   return (
@@ -1041,13 +1082,10 @@ function Editor({
                     placeholder="@perfil"
                   />
                 </Field>
-                <Field label="Horário de funcionamento" full>
-                  <Input
-                    name="horario_funcionamento"
-                    defaultValue={record?.horario_funcionamento || ""}
-                    placeholder="Segunda a sábado, 9h às 18h"
-                  />
-                </Field>
+                <ScheduleEditor
+                  value={record?.horario_funcionamento || ""}
+                  onChange={setScheduleValue}
+                />
                 <Field label="Link Google Maps" full>
                   <Input
                     name="link_google_maps"
