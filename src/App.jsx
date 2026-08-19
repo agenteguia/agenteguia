@@ -343,9 +343,9 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark">
             <img
-              src="/favicon.svg"
+              src="/logo-guia-porto.png"
               alt="Agente Guia"
-              style={{ width: "100%", height: "100%" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
           <div>
@@ -1263,9 +1263,9 @@ function Login({ onError }) {
         <div className="login-brand">
           <div className="brand-mark">
             <img
-              src="/favicon.svg"
+              src="/logo-guia-porto.png"
               alt="Agente Guia"
-              style={{ width: "100%", height: "100%" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
           <strong>Agente Guia</strong>
@@ -1289,9 +1289,9 @@ function Login({ onError }) {
         <div className="mobile-brand">
           <div className="brand-mark">
             <img
-              src="/favicon.svg"
+              src="/logo-guia-porto.png"
               alt="Agente Guia"
-              style={{ width: "100%", height: "100%" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
           <strong>Agente Guia</strong>
