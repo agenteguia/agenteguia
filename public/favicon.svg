@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fundo do mapa pinpoint -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0066cc;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00b8d4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Pinpoint circle -->
+  <circle cx="256" cy="280" r="220" fill="url(#bgGradient)"/>
+  
+  <!-- Ponta do pinpoint -->
+  <path d="M 256 500 L 140 320 Q 140 240 256 160 Q 372 240 372 320 Z" fill="url(#bgGradient)"/>
+  
+  <!-- Ícone de bússola/navegação no centro -->
+  <circle cx="256" cy="220" r="80" fill="white" opacity="0.95"/>
+  
+  <!-- Bússola Rose -->
+  <g transform="translate(256, 220)">
+    <!-- N -->
+    <path d="M 0,-50 L 15,-10 L -15,-10 Z" fill="#0066cc"/>
+    <!-- S -->
+    <path d="M 0,50 L -15,10 L 15,10 Z" fill="#00b8d4" opacity="0.5"/>
+    <!-- E -->
+    <path d="M 50,0 L 10,-15 L 10,15 Z" fill="#00b8d4" opacity="0.5"/>
+    <!-- W -->
+    <path d="M -50,0 L -10,15 L -10,-15 Z" fill="#00b8d4" opacity="0.5"/>
+  </g>
+</svg>

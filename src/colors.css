@@ -1,0 +1,88 @@
+/* 
+ * Paleta de Cores - Agente Guia
+ * Aplicado em: 2026-08-12
+ * Marca: Guia Porto
+ */
+
+:root {
+  /* Cores Primárias */
+  --color-primary: #0066cc;      /* Azul Principal */
+  --color-accent: #00b8d4;       /* Teal/Cyan - Destaque */
+  
+  /* Variações */
+  --color-primary-dark: #0052a3;    /* Azul mais escuro (hover) */
+  --color-primary-light: #e8f4f8;   /* Azul muito claro */
+  --color-accent-light: #b8e3ee;    /* Teal claro */
+  
+  /* Neutros */
+  --color-white: #ffffff;
+  --color-text: #0066cc;
+  --color-text-muted: #71807a;
+  --color-bg: #ffffff;
+  --color-border: #eceeea;
+  --color-border-light: #dce4df;
+  
+  /* Estados */
+  --color-error: #9e3030;
+  --color-success: #00b8d4;
+  
+  /* Transparency */
+  --color-shadow: rgba(0, 0, 0, 0.08);
+  --color-overlay: rgba(0, 102, 204, 0.05);
+}
+
+/* Aplicação nos componentes principais */
+
+/* Sidebar */
+.sidebar {
+  background-color: var(--color-primary);
+  color: var(--color-primary-light);
+}
+
+/* Botões Primários */
+.primary {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+}
+
+.primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+/* Inputs e Campos */
+input:focus,
+textarea:focus,
+select:focus {
+  outline-color: var(--color-accent);
+}
+
+/* Links */
+a {
+  color: var(--color-primary);
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+}
+
+/* Checkboxes e Radios */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-primary);
+}
+
+/* Status/Pills */
+.status {
+  border-color: var(--color-accent);
+}
+
+/* Cards e Containers */
+.card,
+.panel {
+  background-color: var(--color-white);
+  border-color: var(--color-border);
+}
+
+.card:hover {
+  box-shadow: 0 2px 8px var(--color-shadow);
+}
