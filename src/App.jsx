@@ -2,7 +2,7 @@
 import { Building2, ListChecks, Tag } from "lucide-react";
 import { supabase } from "./supabase.js";
 
-// "Locais" (fisico, o que o Agente Guia recomenda) virou "Empresas" no menu, e o
+// "Locais" (fisico, o que o Guia Porto recomenda) virou "Empresas" no menu, e o
 // antigo "Empresas" (cadastro/CNPJ/aprovacao) virou "Empresas parceiras" — renomeado
 // a pedido do Sr. Vitor pra bater com o vocabulario do outro painel
 // (guia-porto-painel-empresas.vercel.app). As CHAVES internas (page state, nomes de
@@ -169,7 +169,7 @@ export default function App() {
   }, [data, page, search, categoryFilter]);
   const subtitles = {
     Empresas: "Gerencie os parceiros e negócios da plataforma.",
-    Locais: "Organize os lugares que o Agente Guia recomenda.",
+    Locais: "Organize os lugares que o Guia Porto recomenda.",
     Categorias: "Defina como os locais são agrupados no aplicativo.",
   };
 
@@ -364,12 +364,12 @@ export default function App() {
           <div className="brand-mark">
             <img
               src="/logo-guia-porto.png"
-              alt="Agente Guia"
+              alt="Guia Porto"
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
           <div>
-            <strong>Agente Guia</strong>
+            <strong>Guia Porto</strong>
             <small>Painel de gestão</small>
           </div>
           <button className="close" onClick={() => setMenuOpen(false)}>
@@ -647,7 +647,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
                   {place?.endereco ? ` · ${place.endereco}` : ""}
                 </p>
                 <p className="partner-description">
-                  {place?.descricao || "Empresa parceira do Agente Guia."}
+                  {place?.descricao || "Empresa parceira do Guia Porto."}
                 </p>
                 <div className="partner-footer">
                   <small>
@@ -1358,11 +1358,11 @@ function Login({ onError }) {
           <div className="brand-mark">
             <img
               src="/logo-guia-porto.png"
-              alt="Agente Guia"
+              alt="Guia Porto"
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
-          <strong>Agente Guia</strong>
+          <strong>Guia Porto</strong>
         </div>
         <div className="art-copy">
           <span>PLATAFORMA DE GESTÃO</span>
@@ -1378,17 +1378,18 @@ function Login({ onError }) {
         </div>
         <div className="orb orb-one" />
         <div className="orb orb-two" />
+        <img src="/turista-login.png" alt="" className="login-turista" />
       </div>
       <div className="login-form">
         <div className="mobile-brand">
           <div className="brand-mark">
             <img
               src="/logo-guia-porto.png"
-              alt="Agente Guia"
+              alt="Guia Porto"
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
-          <strong>Agente Guia</strong>
+          <strong>Guia Porto</strong>
         </div>
         <form onSubmit={submit}>
           <div className="eyebrow">BEM-VINDO DE VOLTA</div>
@@ -1424,7 +1425,7 @@ function Login({ onError }) {
           </button>
         </form>
         <small className="copyright">
-          © 2026 Agente Guia · Todos os direitos reservados
+          © 2026 Guia Porto · Todos os direitos reservados
         </small>
       </div>
     </div>
