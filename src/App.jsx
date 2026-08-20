@@ -1,11 +1,18 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Building2, ListChecks, Tag } from "lucide-react";
 import { supabase } from "./supabase.js";
 
-const nav = [
-  ["Empresas", "▦"],
-  ["Locais", "⌖"],
-  ["Categorias", "◇"],
-];
+// "Locais" (fisico, o que o Agente Guia recomenda) virou "Empresas" no menu, e o
+// antigo "Empresas" (cadastro/CNPJ/aprovacao) virou "Empresas parceiras" — renomeado
+// a pedido do Sr. Vitor pra bater com o vocabulario do outro painel
+// (guia-porto-painel-empresas.vercel.app). As CHAVES internas (page state, nomes de
+// tabela) continuam as mesmas de sempre — só o texto exibido mudou.
+const PAGE_META = {
+  Empresas: { label: "Empresas parceiras", singular: "Empresa parceira", Icon: Building2 },
+  Locais: { label: "Empresas", singular: "Empresa", Icon: ListChecks },
+  Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
+};
+const nav = ["Empresas", "Locais", "Categorias"];
 const emptyData = { categorias: [], empresas: [], locais: [], fotos: [] };
 
 function Field({ label, children, full = false }) {
@@ -55,31 +62,47 @@ export default function App() {
     setNotice({ message, type });
     window.setTimeout(() => setNotice(null), 4200);
   };
+  const fetchTudo = useCallback(
+    () =>
+      Promise.all([
+        supabase
+          .from("categorias")
+          .select("*")
+          .order("ordem", { ascending: true }),
+        supabase
+          .from("empresas")
+          .select("*, categoria:categorias(nome)")
+          .order("criado_em", { ascending: false }),
+        supabase
+          .from("locais")
+          .select(
+            "*, categoria:categorias(nome), empresa:empresas(nome_fantasia)",
+          )
+          .order("nome", { ascending: true }),
+        supabase
+          .from("fotos_locais")
+          .select("*")
+          .order("ordem", { ascending: true }),
+      ]),
+    [],
+  );
+
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    const [categorias, empresas, locais, fotos] = await Promise.all([
-      supabase
-        .from("categorias")
-        .select("*")
-        .order("ordem", { ascending: true }),
-      supabase
-        .from("empresas")
-        .select("*, categoria:categorias(nome)")
-        .order("criado_em", { ascending: false }),
-      supabase
-        .from("locais")
-        .select(
-          "*, categoria:categorias(nome), empresa:empresas(nome_fantasia)",
-        )
-        .order("nome", { ascending: true }),
-      supabase
-        .from("fotos_locais")
-        .select("*")
-        .order("ordem", { ascending: true }),
-    ]);
-    const error =
-      categorias.error || empresas.error || locais.error || fotos.error;
+    let [categorias, empresas, locais, fotos] = await fetchTudo();
+    let error = categorias.error || empresas.error || locais.error || fotos.error;
+    // O token de sessao pode estar momentaneamente expirado logo apos o login ou
+    // depois da aba ficar em segundo plano — isso aparece como erro de JWT na
+    // primeira carga. Em vez de mostrar erro pro usuario, forca um refresh da
+    // sessao e tenta buscar de novo uma vez antes de desistir.
+    if (error && /jwt|token/i.test(error.message || "")) {
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError) {
+        [categorias, empresas, locais, fotos] = await fetchTudo();
+        error = categorias.error || empresas.error || locais.error || fotos.error;
+      }
+    }
     if (error)
       showNotice(
         `Não foi possível carregar os dados: ${error.message}`,
@@ -93,7 +116,7 @@ export default function App() {
         fotos: fotos.data || [],
       });
     setLoading(false);
-  }, []);
+  }, [fetchTudo]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -144,13 +167,10 @@ export default function App() {
       return categoryMatches && searchable.includes(normalizedSearch);
     });
   }, [data, page, search, categoryFilter]);
-  const titles = {
-    Empresas: ["Empresas", "Gerencie os parceiros e negócios da plataforma."],
-    Locais: ["Locais", "Organize os lugares que o Agente Guia recomenda."],
-    Categorias: [
-      "Categorias",
-      "Defina como os locais são agrupados no aplicativo.",
-    ],
+  const subtitles = {
+    Empresas: "Gerencie os parceiros e negócios da plataforma.",
+    Locais: "Organize os lugares que o Agente Guia recomenda.",
+    Categorias: "Defina como os locais são agrupados no aplicativo.",
   };
 
   async function saveRecord(values) {
@@ -289,7 +309,7 @@ export default function App() {
     setModal(false);
     setEditingRecord(null);
     showNotice(
-      `${page.slice(0, -1)} ${editingRecord ? "atualizado" : "salvo"} com sucesso.`,
+      `${PAGE_META[page].singular} ${editingRecord ? "atualizado" : "salvo"} com sucesso.`,
     );
     await loadData();
   }
@@ -323,12 +343,12 @@ export default function App() {
         `Não foi possível excluir: ${result.error.message}`,
         "error",
       );
-    showNotice(`${page.slice(0, -1)} excluído com sucesso.`);
+    showNotice(`${PAGE_META[page].singular} excluído com sucesso.`);
     await loadData();
   }
   if (!session)
     return <Login onError={(message) => showNotice(message, "error")} />;
-  const [title, subtitle] = titles[page];
+  const subtitle = subtitles[page];
   const activeCompanies = data.empresas.filter(
     (x) => x.status === "ativo",
   ).length;
@@ -357,21 +377,24 @@ export default function App() {
           </button>
         </div>
         <nav>
-          {nav.map(([name, icon]) => (
-            <button
-              className={page === name ? "nav-item active" : "nav-item"}
-              key={name}
-              onClick={() => {
-                setPage(name);
-                setMenuOpen(false);
-                setSearch("");
-                setCategoryFilter("Todas");
-              }}
-            >
-              <i>{icon}</i>
-              {name}
-            </button>
-          ))}
+          {nav.map((key) => {
+            const { label, Icon } = PAGE_META[key];
+            return (
+              <button
+                className={page === key ? "nav-item active" : "nav-item"}
+                key={key}
+                onClick={() => {
+                  setPage(key);
+                  setMenuOpen(false);
+                  setSearch("");
+                  setCategoryFilter("Todas");
+                }}
+              >
+                <Icon size={17} strokeWidth={2} />
+                {label}
+              </button>
+            );
+          })}
         </nav>
         <div className="sidebar-bottom">
           <div className="profile">
@@ -392,7 +415,7 @@ export default function App() {
             ☰
           </button>
           <div className="crumb">
-            Gestão <span>/</span> {page}
+            Gestão <span>/</span> {PAGE_META[page].label}
           </div>
           <div className="header-actions">
             <button className="help">?</button>
@@ -402,11 +425,11 @@ export default function App() {
         <section className="content">
           <div className="title-row">
             <div>
-              <h1>{page === "Empresas" ? "Empresas parceiras" : title}</h1>
+              <h1>{PAGE_META[page].label}</h1>
               <p>
-                {page === "Empresas"
-                  ? `${data.empresas.length} no total`
-                  : subtitle}
+                {page === "Categorias"
+                  ? subtitle
+                  : `${(page === "Empresas" ? data.empresas : data.locais).length} no total`}
               </p>
             </div>
             <button
@@ -416,7 +439,7 @@ export default function App() {
                 setModal(true);
               }}
             >
-              ＋ Nova {page.slice(0, -1)}
+              ＋ Nova {PAGE_META[page].singular}
             </button>
           </div>
           <div className="stats">
@@ -432,15 +455,15 @@ export default function App() {
             )}
             {page === "Locais" && (
               <>
-                <Stat value={data.locais.length} label="Locais cadastrados" />
-                <Stat value={activePlaces} label="Locais ativos" />
+                <Stat value={data.locais.length} label="Empresas cadastradas" />
+                <Stat value={activePlaces} label="Empresas ativas" />
                 <Stat value={publicPlaces} label="Pontos públicos" />
               </>
             )}
             {page === "Categorias" && (
               <>
                 <Stat value={data.categorias.length} label="Categorias" />
-                <Stat value={data.locais.length} label="Locais organizados" />
+                <Stat value={data.locais.length} label="Empresas organizadas" />
               </>
             )}
           </div>
@@ -451,11 +474,7 @@ export default function App() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={
-                    page === "Locais"
-                      ? "Buscar locais..."
-                      : `Buscar ${page.toLowerCase()}...`
-                  }
+                  placeholder={`Buscar ${PAGE_META[page].label.toLowerCase()}...`}
                 />
               </div>
               {page !== "Categorias" && (
@@ -759,7 +778,7 @@ function DeleteConfirmModal({ item, page, loading, cancel, confirm }) {
           <div>
             <h2>Confirmar exclusão</h2>
             <p>
-              Deseja realmente excluir este {page.slice(0, -1).toLowerCase()}?
+              Deseja realmente excluir este {PAGE_META[page].singular.toLowerCase()}?
             </p>
           </div>
           <button type="button" onClick={cancel}>
@@ -911,7 +930,7 @@ function Editor({
           <div className="modal-header">
             <div>
               <h2>
-                {record ? "Editar" : "Nova"} {page.slice(0, -1)}
+                {record ? "Editar" : "Nova"} {PAGE_META[page].singular}
               </h2>
               <p>
                 {record
@@ -1095,51 +1114,6 @@ function Editor({
                     placeholder="https://maps.google.com/?q=..."
                   />
                 </Field>
-                <div className="photos-section full">
-                  <h3>Fotos</h3>
-                  <div className="photo-pickers">
-                    <PhotoPicker
-                      label="Capa"
-                      hint="Essa é a que o agente manda nas recomendações"
-                      files={coverFile ? [coverFile] : []}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] || null;
-                        setCoverFile(file);
-                        if (file) setPreviewUrl(URL.createObjectURL(file));
-                      }}
-                    />
-                    <PhotoPicker
-                      label="+ Fotos"
-                      hint="Mostradas quando o turista pede mais detalhes"
-                      multiple
-                      files={extraFiles}
-                      onChange={(event) =>
-                        setExtraFiles(
-                          Array.from(event.target.files || []).slice(0, 7),
-                        )
-                      }
-                    />
-                  </div>
-                  {(previewUrl || photos.length > 0 || extraFiles.length > 0) && (
-                    <div className="photo-previews">
-                      {previewUrl && <PhotoPreview src={previewUrl} alt="Foto de capa" cover onOpen={() => setExpandedImage(previewUrl)} />}
-                      {photos.filter((photo) => !deletedPhotoIds.includes(photo.id)).map((photo) => (
-                        <PhotoPreview
-                          key={photo.id}
-                          src={photo.url}
-                          alt={photo.legenda || "Foto do local"}
-                          removable
-                          onOpen={() => setExpandedImage(photo.url)}
-                          onRemove={() => setDeletedPhotoIds((current) => [...current, photo.id])}
-                        />
-                      ))}
-                      {extraFiles.map((file, index) => {
-                        const fileUrl = URL.createObjectURL(file);
-                        return <PhotoPreview key={`${file.name}-${index}`} src={fileUrl} alt={file.name} removable onOpen={() => setExpandedImage(fileUrl)} onRemove={() => setExtraFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} />;
-                      })}
-                    </div>
-                  )}
-                </div>
                 <Field label="Link Google Maps Curto" full>
                   <Input
                     name="link_google_maps_curto"
@@ -1183,6 +1157,88 @@ function Editor({
                     Local ativo e visível no Guia
                   </span>
                 </Field>
+                <div className="photos-section full">
+                  <h3>Fotos</h3>
+                  <p className="photos-hint">
+                    A capa é a foto que o agente manda nas recomendações; as
+                    extras aparecem quando o turista pede mais detalhes.
+                  </p>
+                  <div className="photo-cover-row">
+                    {previewUrl ? (
+                      <PhotoPreview
+                        src={previewUrl}
+                        alt="Foto de capa"
+                        cover
+                        removable={!!coverFile}
+                        onOpen={() => setExpandedImage(previewUrl)}
+                        onRemove={() => {
+                          setCoverFile(null);
+                          setPreviewUrl(record?.foto_capa_url || "");
+                        }}
+                      />
+                    ) : (
+                      <div className="photo-cover-empty">Sem foto de capa ainda</div>
+                    )}
+                  </div>
+                  {(photos.length > 0 || extraFiles.length > 0) && (
+                    <div className="photo-previews">
+                      {photos
+                        .filter((photo) => !deletedPhotoIds.includes(photo.id))
+                        .map((photo) => (
+                          <PhotoPreview
+                            key={photo.id}
+                            src={photo.url}
+                            alt={photo.legenda || "Foto do local"}
+                            removable
+                            onOpen={() => setExpandedImage(photo.url)}
+                            onRemove={() =>
+                              setDeletedPhotoIds((current) => [...current, photo.id])
+                            }
+                          />
+                        ))}
+                      {extraFiles.map((file, index) => {
+                        const fileUrl = URL.createObjectURL(file);
+                        return (
+                          <PhotoPreview
+                            key={`${file.name}-${index}`}
+                            src={fileUrl}
+                            alt={file.name}
+                            removable
+                            onOpen={() => setExpandedImage(fileUrl)}
+                            onRemove={() =>
+                              setExtraFiles((current) =>
+                                current.filter((_, fileIndex) => fileIndex !== index),
+                              )
+                            }
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="photo-pickers">
+                    <PhotoPicker
+                      label={previewUrl ? "Trocar capa" : "Nova capa"}
+                      hint="Essa é a que o agente manda nas recomendações"
+                      files={coverFile ? [coverFile] : []}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setCoverFile(file);
+                        if (file) setPreviewUrl(URL.createObjectURL(file));
+                      }}
+                    />
+                    <PhotoPicker
+                      label="+ Fotos extras"
+                      hint="Mostradas quando o turista pede mais detalhes"
+                      multiple
+                      files={extraFiles}
+                      onChange={(event) =>
+                        setExtraFiles(
+                          Array.from(event.target.files || []).slice(0, 7),
+                        )
+                      }
+                    />
+                  </div>
+                </div>
               </>
             )}
             {!isCompany && !isPlace && (
@@ -1218,7 +1274,7 @@ function Editor({
               Cancelar
             </button>
             <button className="primary" disabled={loading}>
-              {loading ? "Salvando..." : `Salvar ${page.slice(0, -1)}`}
+              {loading ? "Salvando..." : `Salvar ${PAGE_META[page].singular}`}
             </button>
           </div>
         </form>
