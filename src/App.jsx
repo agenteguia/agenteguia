@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ListChecks, Tag, Bus } from "lucide-react";
+import { Building2, ListChecks, Tag, Bus, MapPin } from "lucide-react";
 import { supabase } from "./supabase.js";
 
 // "Locais" (fisico, o que o Guia Porto recomenda) virou "Empresas" no menu, e o
@@ -10,14 +10,19 @@ import { supabase } from "./supabase.js";
 // ServicosLocais (20/08): balsa/lotação/van/etc — dado que o agente NAO consegue puxar
 // via MCP/API de forma confiavel (ex: valor de balsa), entao passa a ser curado aqui
 // direto, mesmo padrao de Locais (tabela propria, foto de capa, sem RAG).
+// LocaisCidade (21/08): pontos de referencia que NAO aparecem no Google Maps nem no OSM
+// (ponto de onibus/lotacao/van informal, ponto pouco conhecido etc) — precisam SEMPRE de
+// lat/lon exatos, pois sao usados como referencia quando o turista pede "o mais proximo
+// de mim" (busca por distancia real, mesma logica de servicos_locais).
 const PAGE_META = {
   Empresas: { label: "Empresas parceiras", singular: "Empresa parceira", Icon: Building2 },
   Locais: { label: "Empresas", singular: "Empresa", Icon: ListChecks },
   ServicosLocais: { label: "Serviços Locais", singular: "Serviço local", Icon: Bus },
+  LocaisCidade: { label: "Locais da Cidade", singular: "Local da cidade", Icon: MapPin },
   Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
 };
-const nav = ["Empresas", "Locais", "ServicosLocais", "Categorias"];
-const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [] };
+const nav = ["Empresas", "Locais", "ServicosLocais", "LocaisCidade", "Categorias"];
+const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [], locaisCidade: [] };
 
 function gerarSlug(nome) {
   return nome
@@ -101,6 +106,10 @@ export default function App() {
           .from("servicos_locais")
           .select("*")
           .order("nome", { ascending: true }),
+        supabase
+          .from("locais_cidade")
+          .select("*")
+          .order("nome", { ascending: true }),
       ]),
     [],
   );
@@ -108,8 +117,8 @@ export default function App() {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    let [categorias, empresas, locais, fotos, servicos] = await fetchTudo();
-    let error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error;
+    let [categorias, empresas, locais, fotos, servicos, locaisCidade] = await fetchTudo();
+    let error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error;
     // O token de sessao pode estar momentaneamente expirado logo apos o login ou
     // depois da aba ficar em segundo plano — isso aparece como erro de JWT na
     // primeira carga. Em vez de mostrar erro pro usuario, forca um refresh da
@@ -117,8 +126,8 @@ export default function App() {
     if (error && /jwt|token/i.test(error.message || "")) {
       const { error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError) {
-        [categorias, empresas, locais, fotos, servicos] = await fetchTudo();
-        error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error;
+        [categorias, empresas, locais, fotos, servicos, locaisCidade] = await fetchTudo();
+        error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error;
       }
     }
     if (error)
@@ -133,6 +142,7 @@ export default function App() {
         locais: locais.data || [],
         fotos: fotos.data || [],
         servicos: servicos.data || [],
+        locaisCidade: locaisCidade.data || [],
       });
     setLoading(false);
   }, [fetchTudo]);
@@ -161,14 +171,17 @@ export default function App() {
           ? data.locais
           : page === "ServicosLocais"
             ? data.servicos
-            : data.categorias;
+            : page === "LocaisCidade"
+              ? data.locaisCidade
+              : data.categorias;
     const normalizedSearch = search.toLowerCase().trim();
     return list.filter((item) => {
-      // ServicosLocais nao tem categoria_id (usa tipo_servico, sem filtro dedicado ainda —
-      // busca por texto ja cobre, ver "searchable" abaixo).
+      // ServicosLocais/LocaisCidade nao tem categoria_id (usam tipo_servico/tipo_local,
+      // sem filtro dedicado ainda — busca por texto ja cobre, ver "searchable" abaixo).
       const categoryMatches =
         page === "Categorias" ||
         page === "ServicosLocais" ||
+        page === "LocaisCidade" ||
         categoryFilter === "Todas" ||
         item.categoria_id === categoryFilter;
       const linkedPlace =
@@ -183,6 +196,7 @@ export default function App() {
         item.telefone,
         item.categoria?.nome,
         item.tipo_servico,
+        item.tipo_local,
         item.dica,
         item.valor,
         linkedPlace?.nome,
@@ -198,6 +212,7 @@ export default function App() {
     Empresas: "Gerencie os parceiros e negócios da plataforma.",
     Locais: "Organize os lugares que o Guia Porto recomenda.",
     ServicosLocais: "Balsa, lotação, van e outros serviços da região — dado que o agente não consegue confirmar por API, curamos aqui.",
+    LocaisCidade: "Pontos de referência que não aparecem no Google Maps nem no OSM — ponto de ônibus, lotação, van, pontos pouco conhecidos.",
     Categorias: "Defina como os locais são agrupados no aplicativo.",
   };
 
@@ -260,6 +275,24 @@ export default function App() {
         valor: values.valor || null,
         horario_funcionamento: values.horario_funcionamento || null,
         telefone: values.telefone || null,
+        foto_capa_url: values.foto_capa_url || null,
+        link_google_maps: values.link_google_maps || null,
+        slug_nome: slug,
+        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        ativo: values.ativo === "on",
+      };
+    } else if (page === "LocaisCidade") {
+      table = "locais_cidade";
+      // Lat/lon aqui NAO e opcional (diferente de servicos_locais) — e' o dado essencial,
+      // sem ele o ponto nao serve pra nada (nao tem como usar como referencia de distancia).
+      const slug = gerarSlug(values.nome);
+      payload = {
+        nome: values.nome,
+        tipo_local: values.tipo_local,
+        descricao: values.descricao || null,
+        endereco: values.endereco || null,
+        latitude: Number(values.latitude),
+        longitude: Number(values.longitude),
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
@@ -387,6 +420,36 @@ export default function App() {
           "error",
         );
       }
+    } else if (page === "LocaisCidade" && values._coverFile) {
+      // Mesma logica de ServicosLocais — so capa, mesmo bucket "locais", pasta propria.
+      const localCidadeId = editingRecord?.id || result.data.id;
+      const coverFile = values._coverFile;
+      const extension = coverFile.name.includes(".")
+        ? `.${coverFile.name.split(".").pop()}`
+        : "";
+      const path = `local-cidade-${localCidadeId}/capa-${crypto.randomUUID()}${extension}`;
+      const upload = await supabase.storage
+        .from("locais")
+        .upload(path, coverFile, { upsert: false, contentType: coverFile.type || undefined });
+      if (upload.error) {
+        setLoading(false);
+        return showNotice(
+          `Local salvo, mas não foi possível enviar a foto: ${upload.error.message}`,
+          "error",
+        );
+      }
+      const coverUrl = supabase.storage.from("locais").getPublicUrl(path).data.publicUrl;
+      const coverUpdate = await supabase
+        .from("locais_cidade")
+        .update({ foto_capa_url: coverUrl, atualizado_em: new Date().toISOString() })
+        .eq("id", localCidadeId);
+      if (coverUpdate.error) {
+        setLoading(false);
+        return showNotice(
+          `Local salvo, mas não foi possível salvar a foto: ${coverUpdate.error.message}`,
+          "error",
+        );
+      }
     }
     setLoading(false);
     setModal(false);
@@ -416,7 +479,9 @@ export default function App() {
           ? "locais"
           : page === "ServicosLocais"
             ? "servicos_locais"
-            : "categorias";
+            : page === "LocaisCidade"
+              ? "locais_cidade"
+              : "categorias";
     const result = await supabase
       .from(table)
       .delete()
@@ -443,6 +508,7 @@ export default function App() {
   const activePlaces = data.locais.filter((x) => x.ativo).length;
   const publicPlaces = data.locais.filter((x) => !x.empresa_id).length;
   const activeServices = data.servicos.filter((x) => x.ativo).length;
+  const activeCityPlaces = data.locaisCidade.filter((x) => x.ativo).length;
   return (
     <div className="app-shell">
       <aside className={menuOpen ? "sidebar open" : "sidebar"}>
@@ -520,7 +586,9 @@ export default function App() {
                         ? data.empresas
                         : page === "ServicosLocais"
                           ? data.servicos
-                          : data.locais
+                          : page === "LocaisCidade"
+                            ? data.locaisCidade
+                            : data.locais
                     ).length} no total`}
               </p>
             </div>
@@ -531,7 +599,7 @@ export default function App() {
                 setModal(true);
               }}
             >
-              ＋ {page === "ServicosLocais" ? "Novo" : "Nova"} {PAGE_META[page].singular}
+              ＋ {page === "ServicosLocais" || page === "LocaisCidade" ? "Novo" : "Nova"} {PAGE_META[page].singular}
             </button>
           </div>
           <div className="stats">
@@ -558,6 +626,12 @@ export default function App() {
                 <Stat value={activeServices} label="Serviços ativos" />
               </>
             )}
+            {page === "LocaisCidade" && (
+              <>
+                <Stat value={data.locaisCidade.length} label="Locais cadastrados" />
+                <Stat value={activeCityPlaces} label="Locais ativos" />
+              </>
+            )}
             {page === "Categorias" && (
               <>
                 <Stat value={data.categorias.length} label="Categorias" />
@@ -575,7 +649,7 @@ export default function App() {
                   placeholder={`Buscar ${PAGE_META[page].label.toLowerCase()}...`}
                 />
               </div>
-              {page !== "Categorias" && page !== "ServicosLocais" && (
+              {page !== "Categorias" && page !== "ServicosLocais" && page !== "LocaisCidade" && (
                 <div className="category-filters">
                   <button
                     className={
@@ -835,6 +909,73 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
         {loading ? "Carregando dados..." : "Ainda não há serviços cadastrados."}
       </div>
     );
+  if (page === "LocaisCidade")
+    return rows.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {["Local", "Tipo", "Endereço", "Coordenadas", "Status", ""].map((x) => (
+                <th key={x}>{x}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.id}>
+                <td>
+                  <b>{x.nome}</b>
+                  {x.foto_capa_url && <small>com foto</small>}
+                </td>
+                <td>
+                  <span className="pill">{x.tipo_local}</span>
+                </td>
+                <td>{x.endereco || "—"}</td>
+                <td>
+                  <small>{x.latitude?.toFixed(5)}, {x.longitude?.toFixed(5)}</small>
+                </td>
+                <td>
+                  <Status value={x.ativo ? "ativo" : "inativo"} />
+                </td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-button edit"
+                      onClick={() => onEdit(x)}
+                      title="Editar"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button delete"
+                      onClick={() => onDelete(x)}
+                      title="Excluir"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M6 6v14h12V6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty">
+        {loading ? "Carregando dados..." : "Ainda não há locais cadastrados."}
+      </div>
+    );
   return (
     <div className="table-wrap">
       <table>
@@ -1057,7 +1198,8 @@ function Editor({
 }) {
   const isCompany = page === "Empresas",
     isPlace = page === "Locais",
-    isService = page === "ServicosLocais";
+    isService = page === "ServicosLocais",
+    isCityPlace = page === "LocaisCidade";
   const [previewUrl, setPreviewUrl] = useState(record?.foto_capa_url || "");
   const [coverFile, setCoverFile] = useState(null);
   const [extraFiles, setExtraFiles] = useState([]);
@@ -1094,7 +1236,7 @@ function Editor({
           <div className="modal-header">
             <div>
               <h2>
-                {record ? "Editar" : page === "ServicosLocais" ? "Novo" : "Nova"} {PAGE_META[page].singular}
+                {record ? "Editar" : page === "ServicosLocais" || page === "LocaisCidade" ? "Novo" : "Nova"} {PAGE_META[page].singular}
               </h2>
               <p>
                 {record
@@ -1557,7 +1699,136 @@ function Editor({
                 </div>
               </>
             )}
-            {!isCompany && !isPlace && !isService && (
+            {isCityPlace && (
+              <>
+                <Field label="Nome do local">
+                  <Input
+                    name="nome"
+                    defaultValue={record?.nome || ""}
+                    required
+                    placeholder="Ex.: Ponto de ônibus - Praça dos Pataxós"
+                  />
+                </Field>
+                <Field label="Tipo">
+                  <Input
+                    name="tipo_local"
+                    defaultValue={record?.tipo_local || ""}
+                    required
+                    placeholder="Ex.: ponto_onibus, ponto_lotacao, ponto_van"
+                    list="tipos-local-cidade-sugeridos"
+                  />
+                  <datalist id="tipos-local-cidade-sugeridos">
+                    <option value="ponto_onibus" />
+                    <option value="ponto_lotacao" />
+                    <option value="ponto_van" />
+                    <option value="ponto_pouco_conhecido" />
+                    <option value="outro" />
+                  </datalist>
+                </Field>
+                <Field label="Descrição" full>
+                  <textarea
+                    name="descricao"
+                    defaultValue={record?.descricao || ""}
+                    placeholder="O que tem nesse ponto? Alguma referência pra achar mais fácil?"
+                  />
+                </Field>
+                <Field label="Endereço/referência" full>
+                  <Input
+                    name="endereco"
+                    defaultValue={record?.endereco || ""}
+                    placeholder="Rua, esquina, ponto de referência"
+                  />
+                </Field>
+                <Field label="Link Google Maps (opcional, só pra ajudar a pegar lat/lon)" full>
+                  <Input
+                    name="link_google_maps"
+                    type="url"
+                    onChange={handleInputChange}
+                    defaultValue={record?.link_google_maps || ""}
+                    placeholder="https://maps.google.com/?q=..."
+                  />
+                </Field>
+                <Field label="Latitude (obrigatório)">
+                  <Input
+                    name="latitude"
+                    type="number"
+                    step="any"
+                    required
+                    defaultValue={
+                      record?.latitude ??
+                      extractLatLng(record?.link_google_maps || "").lat
+                    }
+                    placeholder="-16.44"
+                  />
+                </Field>
+                <Field label="Longitude (obrigatório)">
+                  <Input
+                    name="longitude"
+                    type="number"
+                    step="any"
+                    required
+                    defaultValue={
+                      record?.longitude ??
+                      extractLatLng(record?.link_google_maps || "").lng
+                    }
+                    placeholder="-39.07"
+                  />
+                </Field>
+                <Field label="Link curto (gerado automaticamente pelo nome)" full>
+                  <Input
+                    value={record?.link_google_maps_curto || "gerado ao salvar, a partir do nome do local"}
+                    readOnly
+                    disabled
+                  />
+                </Field>
+                <Field full label="">
+                  <span className="check-line">
+                    <input
+                      name="ativo"
+                      type="checkbox"
+                      defaultChecked={record?.ativo ?? true}
+                    />{" "}
+                    Local ativo e usável como referência pelo agente
+                  </span>
+                </Field>
+                <div className="photos-section full">
+                  <h3>Foto de capa (opcional)</h3>
+                  <p className="photos-hint">
+                    Nem todo ponto precisa de foto — use quando ajudar a identificar o local.
+                  </p>
+                  <div className="photo-cover-row">
+                    {previewUrl ? (
+                      <PhotoPreview
+                        src={previewUrl}
+                        alt="Foto de capa"
+                        cover
+                        removable={!!coverFile}
+                        onOpen={() => setExpandedImage(previewUrl)}
+                        onRemove={() => {
+                          setCoverFile(null);
+                          setPreviewUrl(record?.foto_capa_url || "");
+                        }}
+                      />
+                    ) : (
+                      <div className="photo-cover-empty">Sem foto de capa ainda</div>
+                    )}
+                  </div>
+                  <div className="photo-pickers">
+                    <PhotoPicker
+                      label={previewUrl ? "Trocar capa" : "Nova capa"}
+                      hint="Foto do ponto, se ajudar"
+                      files={coverFile ? [coverFile] : []}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setCoverFile(file);
+                        if (file) setPreviewUrl(URL.createObjectURL(file));
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+            {!isCompany && !isPlace && !isService && !isCityPlace && (
               <>
                 <Field label="Nome">
                   <Input
