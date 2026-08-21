@@ -246,6 +246,9 @@ export default function App() {
       };
     } else if (page === "ServicosLocais") {
       table = "servicos_locais";
+      // Mesmo padrao do slug de Locais (guiaporto.com.br/<slug>) — link curto proprio em
+      // vez de encurtador de terceiro, facilita o direcionamento do turista pro local.
+      const slug = gerarSlug(values.nome);
       payload = {
         nome: values.nome,
         tipo_servico: values.tipo_servico,
@@ -259,7 +262,8 @@ export default function App() {
         telefone: values.telefone || null,
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
-        link_google_maps_curto: values.link_google_maps_curto || null,
+        slug_nome: slug,
+        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
         ativo: values.ativo === "on",
       };
     } else {
@@ -1475,13 +1479,11 @@ function Editor({
                     placeholder="https://maps.google.com/?q=..."
                   />
                 </Field>
-                <Field label="Link Google Maps Curto" full>
+                <Field label="Link curto (gerado automaticamente pelo nome)" full>
                   <Input
-                    name="link_google_maps_curto"
-                    type="url"
-                    onChange={handleInputChange}
-                    defaultValue={record?.link_google_maps_curto || ""}
-                    placeholder="https://tinyurl.com/..."
+                    value={record?.link_google_maps_curto || "gerado ao salvar, a partir do nome do serviço"}
+                    readOnly
+                    disabled
                   />
                 </Field>
                 <Field label="Latitude">
