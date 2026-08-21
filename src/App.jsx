@@ -19,6 +19,16 @@ const PAGE_META = {
 const nav = ["Empresas", "Locais", "ServicosLocais", "Categorias"];
 const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [] };
 
+function gerarSlug(nome) {
+  return nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
 function Field({ label, children, full = false }) {
   return (
     <label className={full ? "field full" : "field"}>
@@ -214,6 +224,7 @@ export default function App() {
       if (!editingRecord) payload.criado_em = new Date().toISOString();
     } else if (page === "Locais") {
       table = "locais";
+      const slug = gerarSlug(values.nome);
       payload = {
         categoria_id: values.categoria_id,
         empresa_id: values.empresa_id || null,
@@ -229,7 +240,8 @@ export default function App() {
         horario_funcionamento: values.horario_funcionamento || null,
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
-        link_google_maps_curto: values.link_google_maps_curto || null,
+        slug_nome: slug,
+        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
         ativo: values.ativo === "on",
       };
     } else if (page === "ServicosLocais") {
