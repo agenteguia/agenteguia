@@ -1216,9 +1216,51 @@ function Editor({
 
   const extractLatLng = (mapsUrl) => {
     if (!mapsUrl) return { lat: "", lng: "" };
-    const match = mapsUrl.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    // !3d/!4d e o pino exato que o Google salvou (mais preciso); @lat,lng e so o centro
+    // da tela no momento em que o link foi copiado (pode estar levemente deslocado se
+    // quem copiou tinha arrastado/dado zoom no mapa antes).
+    let match = mapsUrl.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+    if (match) return { lat: match[1], lng: match[2] };
+    match = mapsUrl.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (match) return { lat: match[1], lng: match[2] };
+    match = mapsUrl.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
     if (match) return { lat: match[1], lng: match[2] };
     return { lat: "", lng: "" };
+  };
+
+  const [coordStatus, setCoordStatus] = useState("");
+
+  // Roda quando o usuario sai do campo de Link Google Maps (colar + Tab/clicar fora).
+  // Link completo ja tem lat/lng embutido, resolve local e na hora. Link CURTO
+  // (maps.app.goo.gl) nao tem coordenada na URL — precisa seguir o redirect, e isso o
+  // navegador nao consegue fazer sozinho (CORS), por isso cai pro endpoint /api/resolver-maps.
+  const handleMapsLinkBlur = async (e) => {
+    const url = e.target.value.trim();
+    const form = e.target.form;
+    if (!url || !form) return;
+    const latInput = form.querySelector('input[name="latitude"]');
+    const lngInput = form.querySelector('input[name="longitude"]');
+    if (!latInput || !lngInput) return;
+
+    let coords = extractLatLng(url);
+    if (!coords.lat) {
+      setCoordStatus("Buscando coordenadas no link…");
+      try {
+        const resp = await fetch(`/api/resolver-maps?url=${encodeURIComponent(url)}`);
+        const dados = await resp.json();
+        if (dados.lat) coords = { lat: dados.lat, lng: dados.lng };
+      } catch {
+        // segue com coords vazio, cai no status de erro abaixo
+      }
+    }
+
+    if (coords.lat && coords.lng) {
+      latInput.value = coords.lat;
+      lngInput.value = coords.lng;
+      setCoordStatus("📍 Latitude e longitude preenchidas automaticamente a partir do link.");
+    } else {
+      setCoordStatus("Não consegui achar coordenadas nesse link — preencha latitude/longitude manualmente.");
+    }
   };
 
   const submit = (event) => {
@@ -1425,17 +1467,17 @@ function Editor({
                     name="link_google_maps"
                     type="url"
                     onChange={handleInputChange}
+                    onBlur={handleMapsLinkBlur}
                     defaultValue={record?.link_google_maps || ""}
-                    placeholder="https://maps.google.com/?q=..."
+                    placeholder="https://maps.google.com/?q=... (aceita link curto maps.app.goo.gl)"
                   />
+                  {coordStatus && <small className="coord-status">{coordStatus}</small>}
                 </Field>
-                <Field label="Link Google Maps Curto" full>
+                <Field label="Link curto (gerado automaticamente pelo nome)" full>
                   <Input
-                    name="link_google_maps_curto"
-                    type="url"
-                    onChange={handleInputChange}
-                    defaultValue={record?.link_google_maps_curto || ""}
-                    placeholder="https://goo.gl/..."
+                    value={record?.link_google_maps_curto || "gerado ao salvar, a partir do nome da empresa"}
+                    readOnly
+                    disabled
                   />
                 </Field>
                 <Field label="Latitude">
@@ -1626,9 +1668,11 @@ function Editor({
                     name="link_google_maps"
                     type="url"
                     onChange={handleInputChange}
+                    onBlur={handleMapsLinkBlur}
                     defaultValue={record?.link_google_maps || ""}
-                    placeholder="https://maps.google.com/?q=..."
+                    placeholder="https://maps.google.com/?q=... (aceita link curto maps.app.goo.gl)"
                   />
+                  {coordStatus && <small className="coord-status">{coordStatus}</small>}
                 </Field>
                 <Field label="Link curto (gerado automaticamente pelo nome)" full>
                   <Input
@@ -1753,9 +1797,11 @@ function Editor({
                     name="link_google_maps"
                     type="url"
                     onChange={handleInputChange}
+                    onBlur={handleMapsLinkBlur}
                     defaultValue={record?.link_google_maps || ""}
-                    placeholder="https://maps.google.com/?q=..."
+                    placeholder="https://maps.google.com/?q=... (aceita link curto maps.app.goo.gl)"
                   />
+                  {coordStatus && <small className="coord-status">{coordStatus}</small>}
                 </Field>
                 <Field label="Latitude (obrigatório)">
                   <Input
