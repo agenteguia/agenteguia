@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ListChecks, Tag, Bus, MapPin, Compass, Landmark } from "lucide-react";
+import { Building2, ListChecks, Tag, Bus, MapPin, Compass, Landmark, CreditCard } from "lucide-react";
 import { supabase } from "./supabase.js";
 
 // "Locais" (fisico, o que o Guia Porto recomenda) virou "Empresas" no menu, e o
@@ -24,6 +24,12 @@ import { supabase } from "./supabase.js";
 // ServicosLocais/LocaisCidade, mas pra historia: complementa (nao substitui) a busca via
 // MCP Historia/Wikipedia que o agente ja tem (historia.js) pra pontos que merecem cobertura
 // hiper-local com foto propria. Tambem ainda NAO entra no prompt/recomendacao.
+// Assinantes (22/08): primeiro menu de GERENCIAMENTO (nao catalogo) — gerencia a tabela
+// "assinaturas" que ja existia no banco (turista + plano + status), so nao tinha UI nenhuma
+// ainda. Status simplificado pro pedido do Sr. Vitor: ativo/inadimplente/cancelado (banco
+// tinha um conjunto mais rico — trial/ativa/pendente_pagamento/expirada/cancelada — trocado
+// porque a tabela estava vazia e nada no agente lia isso ainda). Webhook do AbacatePay pra
+// automatizar a criacao/atualizacao fica pra depois, combinado com o Sr. Vitor.
 const PAGE_META = {
   Empresas: { label: "Empresas parceiras", singular: "Empresa parceira", Icon: Building2 },
   Locais: { label: "Empresas", singular: "Empresa", Icon: ListChecks },
@@ -32,9 +38,10 @@ const PAGE_META = {
   EmpresasTurismo: { label: "Empresas Turismo", singular: "Passeio", Icon: Compass },
   HistoriasCidade: { label: "Histórias da Cidade", singular: "História", Icon: Landmark },
   Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
+  Assinantes: { label: "Assinantes", singular: "Assinatura", Icon: CreditCard },
 };
-const nav = ["Empresas", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "Categorias"];
-const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [] };
+const nav = ["Empresas", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "Categorias", "Assinantes"];
+const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [] };
 
 function gerarSlug(nome) {
   return nome
@@ -72,6 +79,7 @@ function Status({ value }) {
     inadimplente: "Inadimplente",
     recusado: "Recusada",
     inativo: "Inativo",
+    cancelado: "Cancelada",
   };
   return <span className={`status ${value}`}>{labels[value] || value}</span>;
 }
@@ -138,6 +146,18 @@ export default function App() {
           .from("fotos_historias")
           .select("*")
           .order("ordem", { ascending: true }),
+        supabase
+          .from("assinaturas")
+          .select("*, turista:turistas(nome, telefone), plano:planos(nome, preco_centavos)")
+          .order("inicio_em", { ascending: false }),
+        supabase
+          .from("turistas")
+          .select("id, nome, telefone")
+          .order("nome", { ascending: true }),
+        supabase
+          .from("planos")
+          .select("*")
+          .order("preco_centavos", { ascending: true }),
       ]),
     [],
   );
@@ -145,8 +165,8 @@ export default function App() {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    let [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias] = await fetchTudo();
-    let error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error;
+    let [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos] = await fetchTudo();
+    let error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error;
     // O token de sessao pode estar momentaneamente expirado logo apos o login ou
     // depois da aba ficar em segundo plano — isso aparece como erro de JWT na
     // primeira carga. Em vez de mostrar erro pro usuario, forca um refresh da
@@ -154,8 +174,8 @@ export default function App() {
     if (error && /jwt|token/i.test(error.message || "")) {
       const { error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError) {
-        [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias] = await fetchTudo();
-        error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error;
+        [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos] = await fetchTudo();
+        error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error;
       }
     }
     if (error)
@@ -175,6 +195,9 @@ export default function App() {
         fotosPasseios: fotosPasseios.data || [],
         historias: historias.data || [],
         fotosHistorias: fotosHistorias.data || [],
+        assinaturas: assinaturas.data || [],
+        turistas: turistas.data || [],
+        planos: planos.data || [],
       });
     setLoading(false);
   }, [fetchTudo]);
@@ -209,18 +232,21 @@ export default function App() {
                 ? data.passeios
                 : page === "HistoriasCidade"
                   ? data.historias
-                  : data.categorias;
+                  : page === "Assinantes"
+                    ? data.assinaturas
+                    : data.categorias;
     const normalizedSearch = search.toLowerCase().trim();
     return list.filter((item) => {
-      // ServicosLocais/LocaisCidade/EmpresasTurismo/HistoriasCidade nao tem categoria_id
-      // (usam tipo_servico/tipo_local/nome_empresa/so texto, sem filtro dedicado ainda —
-      // busca por texto ja cobre, ver "searchable" abaixo).
+      // ServicosLocais/LocaisCidade/EmpresasTurismo/HistoriasCidade/Assinantes nao tem
+      // categoria_id (usam tipo_servico/tipo_local/nome_empresa/status, sem filtro dedicado
+      // ainda — busca por texto ja cobre, ver "searchable" abaixo).
       const categoryMatches =
         page === "Categorias" ||
         page === "ServicosLocais" ||
         page === "LocaisCidade" ||
         page === "EmpresasTurismo" ||
         page === "HistoriasCidade" ||
+        page === "Assinantes" ||
         categoryFilter === "Todas" ||
         item.categoria_id === categoryFilter;
       const linkedPlace =
@@ -240,6 +266,10 @@ export default function App() {
         item.tipo_local,
         item.dica,
         item.valor,
+        item.status,
+        item.turista?.nome,
+        item.turista?.telefone,
+        item.plano?.nome,
         linkedPlace?.nome,
         linkedPlace?.descricao,
       ]
@@ -257,6 +287,7 @@ export default function App() {
     EmpresasTurismo: "Passeios oferecidos por empresas de turismo da região — valor, empresa e fotos, separado dos outros locais.",
     HistoriasCidade: "Pontos históricos com a história completa, foto e localização — cobertura curada, além da busca automática do agente.",
     Categorias: "Defina como os locais são agrupados no aplicativo.",
+    Assinantes: "Gerencie quem está com acesso pago ao Guia Porto — status, plano e vigência.",
   };
 
   async function saveRecord(values) {
@@ -379,6 +410,16 @@ export default function App() {
         link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
         ativo: values.ativo === "on",
         atualizado_em: new Date().toISOString(),
+      };
+    } else if (page === "Assinantes") {
+      table = "assinaturas";
+      payload = {
+        turista_id: values.turista_id,
+        plano_id: values.plano_id || null,
+        status: values.status || "ativo",
+        inicio_em: values.inicio_em ? new Date(values.inicio_em).toISOString() : null,
+        fim_em: values.fim_em ? new Date(values.fim_em).toISOString() : null,
+        renovar_lembrete: values.renovar_lembrete === "on",
       };
     } else {
       table = "categorias";
@@ -704,7 +745,9 @@ export default function App() {
                 ? "passeios"
                 : page === "HistoriasCidade"
                   ? "historias_cidade"
-                  : "categorias";
+                  : page === "Assinantes"
+                    ? "assinaturas"
+                    : "categorias";
     const result = await supabase
       .from(table)
       .delete()
@@ -734,6 +777,8 @@ export default function App() {
   const activeCityPlaces = data.locaisCidade.filter((x) => x.ativo).length;
   const activeTours = data.passeios.filter((x) => x.ativo).length;
   const activeHistorias = data.historias.filter((x) => x.ativo).length;
+  const activeAssinaturas = data.assinaturas.filter((x) => x.status === "ativo").length;
+  const inadimplentesAssinaturas = data.assinaturas.filter((x) => x.status === "inadimplente").length;
   return (
     <div className="app-shell">
       <aside className={menuOpen ? "sidebar open" : "sidebar"}>
@@ -817,7 +862,9 @@ export default function App() {
                               ? data.passeios
                               : page === "HistoriasCidade"
                                 ? data.historias
-                                : data.locais
+                                : page === "Assinantes"
+                                  ? data.assinaturas
+                                  : data.locais
                     ).length} no total`}
               </p>
             </div>
@@ -879,6 +926,13 @@ export default function App() {
                 <Stat value={data.locais.length} label="Empresas organizadas" />
               </>
             )}
+            {page === "Assinantes" && (
+              <>
+                <Stat value={data.assinaturas.length} label="Assinaturas no total" />
+                <Stat value={activeAssinaturas} label="Ativas" />
+                <Stat value={inadimplentesAssinaturas} label="Inadimplentes" />
+              </>
+            )}
           </div>
           <section className={page === "Empresas" ? "partner-panel" : "panel"}>
             <div className="panel-top">
@@ -890,7 +944,7 @@ export default function App() {
                   placeholder={`Buscar ${PAGE_META[page].label.toLowerCase()}...`}
                 />
               </div>
-              {page !== "Categorias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && (
+              {page !== "Categorias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && page !== "Assinantes" && (
                 <div className="category-filters">
                   <button
                     className={
@@ -938,6 +992,8 @@ export default function App() {
           page={page}
           categories={data.categorias}
           companies={data.empresas}
+          turistas={data.turistas}
+          planos={data.planos}
           loading={loading}
           record={editingRecord}
           photos={
@@ -1349,6 +1405,71 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
         {loading ? "Carregando dados..." : "Ainda não há histórias cadastradas."}
       </div>
     );
+  if (page === "Assinantes")
+    return rows.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {["Turista", "Plano", "Status", "Início", "Fim", ""].map((x) => (
+                <th key={x}>{x}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.id}>
+                <td>
+                  <b>{x.turista?.nome || "—"}</b>
+                  <small>{x.turista?.telefone}</small>
+                </td>
+                <td>
+                  <span className="pill">{x.plano?.nome || "Sem plano"}</span>
+                </td>
+                <td>
+                  <Status value={x.status} />
+                </td>
+                <td>{x.inicio_em ? new Date(x.inicio_em).toLocaleDateString("pt-BR") : "—"}</td>
+                <td>{x.fim_em ? new Date(x.fim_em).toLocaleDateString("pt-BR") : "—"}</td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-button edit"
+                      onClick={() => onEdit(x)}
+                      title="Editar"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button delete"
+                      onClick={() => onDelete(x)}
+                      title="Excluir"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M6 6v14h12V6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty">
+        {loading ? "Carregando dados..." : "Ainda não há assinantes cadastrados."}
+      </div>
+    );
   return (
     <div className="table-wrap">
       <table>
@@ -1563,6 +1684,8 @@ function Editor({
   page,
   categories,
   companies,
+  turistas = [],
+  planos = [],
   photos = [],
   record,
   close,
@@ -1574,7 +1697,8 @@ function Editor({
     isService = page === "ServicosLocais",
     isCityPlace = page === "LocaisCidade",
     isTour = page === "EmpresasTurismo",
-    isHistoria = page === "HistoriasCidade";
+    isHistoria = page === "HistoriasCidade",
+    isAssinatura = page === "Assinantes";
   const [previewUrl, setPreviewUrl] = useState(record?.foto_capa_url || "");
   const [coverFile, setCoverFile] = useState(null);
   const [extraFiles, setExtraFiles] = useState([]);
@@ -2608,7 +2732,64 @@ function Editor({
                 </div>
               </>
             )}
-            {!isCompany && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && (
+            {isAssinatura && (
+              <>
+                <Field label="Turista" full>
+                  <select name="turista_id" required defaultValue={record?.turista_id || ""}>
+                    <option value="" disabled>
+                      Selecione o turista
+                    </option>
+                    {turistas.map((x) => (
+                      <option value={x.id} key={x.id}>
+                        {x.nome} — {x.telefone}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Plano">
+                  <select name="plano_id" defaultValue={record?.plano_id || ""}>
+                    <option value="">Sem plano definido</option>
+                    {planos.map((x) => (
+                      <option value={x.id} key={x.id}>
+                        {x.nome} — R$ {(x.preco_centavos / 100).toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Status">
+                  <select name="status" defaultValue={record?.status || "ativo"}>
+                    <option value="ativo">Ativo</option>
+                    <option value="inadimplente">Inadimplente</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                </Field>
+                <Field label="Início">
+                  <Input
+                    name="inicio_em"
+                    type="date"
+                    defaultValue={record?.inicio_em ? record.inicio_em.slice(0, 10) : ""}
+                  />
+                </Field>
+                <Field label="Fim (vigência/renovação)">
+                  <Input
+                    name="fim_em"
+                    type="date"
+                    defaultValue={record?.fim_em ? record.fim_em.slice(0, 10) : ""}
+                  />
+                </Field>
+                <Field full label="">
+                  <span className="check-line">
+                    <input
+                      name="renovar_lembrete"
+                      type="checkbox"
+                      defaultChecked={record?.renovar_lembrete ?? false}
+                    />{" "}
+                    Enviar lembrete de renovação antes de vencer
+                  </span>
+                </Field>
+              </>
+            )}
+            {!isCompany && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && !isAssinatura && (
               <>
                 <Field label="Nome">
                   <Input
