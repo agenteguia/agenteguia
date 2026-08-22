@@ -250,6 +250,7 @@ export default function App() {
         latitude: values.latitude ? Number(values.latitude) : null,
         longitude: values.longitude ? Number(values.longitude) : null,
         faixa_preco: values.faixa_preco || null,
+        faixa_preco_alimentacao: values.faixa_preco_alimentacao || null,
         telefone: values.telefone || null,
         instagram: values.instagram || null,
         horario_funcionamento: values.horario_funcionamento || null,
@@ -1371,6 +1372,14 @@ function Editor({
                     <option value="$$">$$</option>
                     <option value="$$$">$$$</option>
                   </select>
+                </Field>
+                <Field label="Faixa de alimentação (R$)">
+                  <input
+                    type="text"
+                    name="faixa_preco_alimentacao"
+                    defaultValue={record?.faixa_preco_alimentacao || ""}
+                    placeholder="Ex: A partir de R$125 - R$245"
+                  />
                 </Field>
                 <Field label="Descrição" full>
                   <textarea
