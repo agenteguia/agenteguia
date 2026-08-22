@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ListChecks, Tag, Bus, MapPin, Compass } from "lucide-react";
+import { Building2, ListChecks, Tag, Bus, MapPin, Compass, Landmark } from "lucide-react";
 import { supabase } from "./supabase.js";
 
 // "Locais" (fisico, o que o Guia Porto recomenda) virou "Empresas" no menu, e o
@@ -19,16 +19,22 @@ import { supabase } from "./supabase.js";
 // Vitor: organiza melhor a indicacao). AINDA NAO entra no prompt do agente/recomendacao —
 // isso fica pro "sistema algoritmico" combinado que vai indicar TODAS essas tabelas juntas,
 // depois que todos os menus novos estiverem prontos.
+// HistoriasCidade (22/08): pontos historicos curados a mao (nome, historia em texto longo,
+// galeria de fotos, lat/lon OBRIGATORIOS) — mesma logica de "curar direto" de
+// ServicosLocais/LocaisCidade, mas pra historia: complementa (nao substitui) a busca via
+// MCP Historia/Wikipedia que o agente ja tem (historia.js) pra pontos que merecem cobertura
+// hiper-local com foto propria. Tambem ainda NAO entra no prompt/recomendacao.
 const PAGE_META = {
   Empresas: { label: "Empresas parceiras", singular: "Empresa parceira", Icon: Building2 },
   Locais: { label: "Empresas", singular: "Empresa", Icon: ListChecks },
   ServicosLocais: { label: "Serviços Locais", singular: "Serviço local", Icon: Bus },
   LocaisCidade: { label: "Locais da Cidade", singular: "Local da cidade", Icon: MapPin },
   EmpresasTurismo: { label: "Empresas Turismo", singular: "Passeio", Icon: Compass },
+  HistoriasCidade: { label: "Histórias da Cidade", singular: "História", Icon: Landmark },
   Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
 };
-const nav = ["Empresas", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "Categorias"];
-const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [] };
+const nav = ["Empresas", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "Categorias"];
+const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [] };
 
 function gerarSlug(nome) {
   return nome
@@ -124,6 +130,14 @@ export default function App() {
           .from("fotos_passeios")
           .select("*")
           .order("ordem", { ascending: true }),
+        supabase
+          .from("historias_cidade")
+          .select("*")
+          .order("nome", { ascending: true }),
+        supabase
+          .from("fotos_historias")
+          .select("*")
+          .order("ordem", { ascending: true }),
       ]),
     [],
   );
@@ -131,8 +145,8 @@ export default function App() {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    let [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios] = await fetchTudo();
-    let error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error;
+    let [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias] = await fetchTudo();
+    let error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error;
     // O token de sessao pode estar momentaneamente expirado logo apos o login ou
     // depois da aba ficar em segundo plano — isso aparece como erro de JWT na
     // primeira carga. Em vez de mostrar erro pro usuario, forca um refresh da
@@ -140,8 +154,8 @@ export default function App() {
     if (error && /jwt|token/i.test(error.message || "")) {
       const { error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError) {
-        [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios] = await fetchTudo();
-        error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error;
+        [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias] = await fetchTudo();
+        error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error;
       }
     }
     if (error)
@@ -159,6 +173,8 @@ export default function App() {
         locaisCidade: locaisCidade.data || [],
         passeios: passeios.data || [],
         fotosPasseios: fotosPasseios.data || [],
+        historias: historias.data || [],
+        fotosHistorias: fotosHistorias.data || [],
       });
     setLoading(false);
   }, [fetchTudo]);
@@ -191,17 +207,20 @@ export default function App() {
               ? data.locaisCidade
               : page === "EmpresasTurismo"
                 ? data.passeios
-                : data.categorias;
+                : page === "HistoriasCidade"
+                  ? data.historias
+                  : data.categorias;
     const normalizedSearch = search.toLowerCase().trim();
     return list.filter((item) => {
-      // ServicosLocais/LocaisCidade/EmpresasTurismo nao tem categoria_id (usam
-      // tipo_servico/tipo_local/nome_empresa, sem filtro dedicado ainda — busca por
-      // texto ja cobre, ver "searchable" abaixo).
+      // ServicosLocais/LocaisCidade/EmpresasTurismo/HistoriasCidade nao tem categoria_id
+      // (usam tipo_servico/tipo_local/nome_empresa/so texto, sem filtro dedicado ainda —
+      // busca por texto ja cobre, ver "searchable" abaixo).
       const categoryMatches =
         page === "Categorias" ||
         page === "ServicosLocais" ||
         page === "LocaisCidade" ||
         page === "EmpresasTurismo" ||
+        page === "HistoriasCidade" ||
         categoryFilter === "Todas" ||
         item.categoria_id === categoryFilter;
       const linkedPlace =
@@ -213,6 +232,7 @@ export default function App() {
         item.nome,
         item.nome_empresa,
         item.descricao,
+        item.historia,
         item.endereco,
         item.telefone,
         item.categoria?.nome,
@@ -235,6 +255,7 @@ export default function App() {
     ServicosLocais: "Balsa, lotação, van e outros serviços da região — dado que o agente não consegue confirmar por API, curamos aqui.",
     LocaisCidade: "Pontos de referência que não aparecem no Google Maps nem no OSM — ponto de ônibus, lotação, van, pontos pouco conhecidos.",
     EmpresasTurismo: "Passeios oferecidos por empresas de turismo da região — valor, empresa e fotos, separado dos outros locais.",
+    HistoriasCidade: "Pontos históricos com a história completa, foto e localização — cobertura curada, além da busca automática do agente.",
     Categorias: "Defina como os locais são agrupados no aplicativo.",
   };
 
@@ -334,6 +355,23 @@ export default function App() {
         latitude: values.latitude ? Number(values.latitude) : null,
         longitude: values.longitude ? Number(values.longitude) : null,
         telefone: values.telefone || null,
+        horario_funcionamento: values.horario_funcionamento || null,
+        foto_capa_url: values.foto_capa_url || null,
+        link_google_maps: values.link_google_maps || null,
+        slug_nome: slug,
+        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        ativo: values.ativo === "on",
+        atualizado_em: new Date().toISOString(),
+      };
+    } else if (page === "HistoriasCidade") {
+      table = "historias_cidade";
+      const slug = gerarSlug(values.nome);
+      payload = {
+        nome: values.nome,
+        historia: values.historia || null,
+        endereco: values.endereco || null,
+        latitude: Number(values.latitude),
+        longitude: Number(values.longitude),
         horario_funcionamento: values.horario_funcionamento || null,
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
@@ -562,6 +600,75 @@ export default function App() {
           "error",
         );
       }
+    } else if (page === "HistoriasCidade") {
+      // Mesma logica de Locais/EmpresasTurismo (capa + galeria de extras) — mesmo bucket
+      // "locais", pasta propria "historia-<id>", tabela de galeria propria (fotos_historias).
+      const historiaId = editingRecord?.id || result.data.id;
+      const coverFile = values._coverFile;
+      const extraFiles = values._extraFiles || [];
+      const deletedPhotoIds = values._deletedPhotoIds || [];
+      const getStoragePath = (url) => {
+        const marker = "/storage/v1/object/public/locais/";
+        const markerIndex = url?.indexOf(marker);
+        return markerIndex === -1 ? null : decodeURIComponent(url.slice(markerIndex + marker.length));
+      };
+      const uploadFile = async (file, folder) => {
+        const extension = file.name.includes(".")
+          ? `.${file.name.split(".").pop()}`
+          : "";
+        const path = `historia-${historiaId}/${folder}-${crypto.randomUUID()}${extension}`;
+        const upload = await supabase.storage
+          .from("locais")
+          .upload(path, file, {
+            upsert: false,
+            contentType: file.type || undefined,
+          });
+        if (upload.error) throw upload.error;
+        return supabase.storage.from("locais").getPublicUrl(path).data
+          .publicUrl;
+      };
+      try {
+        if (deletedPhotoIds.length) {
+          const deletedPhotos = data.fotosHistorias.filter((photo) => deletedPhotoIds.includes(photo.id));
+          const paths = deletedPhotos.map((photo) => getStoragePath(photo.url)).filter(Boolean);
+          if (paths.length) {
+            const storageDelete = await supabase.storage.from("locais").remove(paths);
+            if (storageDelete.error) throw storageDelete.error;
+          }
+          const photosDelete = await supabase.from("fotos_historias").delete().in("id", deletedPhotoIds);
+          if (photosDelete.error) throw photosDelete.error;
+        }
+        if (coverFile) {
+          const coverUrl = await uploadFile(coverFile, "capa");
+          const coverUpdate = await supabase
+            .from("historias_cidade")
+            .update({ foto_capa_url: coverUrl })
+            .eq("id", historiaId);
+          if (coverUpdate.error) throw coverUpdate.error;
+        }
+        if (extraFiles.length) {
+          const currentPhotos = data.fotosHistorias.filter(
+            (photo) => photo.historia_id === historiaId,
+          );
+          const uploadedPhotos = [];
+          for (const [index, file] of extraFiles.entries())
+            uploadedPhotos.push({
+              historia_id: historiaId,
+              url: await uploadFile(file, "extra"),
+              ordem: currentPhotos.length + index + 1,
+            });
+          const photosInsert = await supabase
+            .from("fotos_historias")
+            .insert(uploadedPhotos);
+          if (photosInsert.error) throw photosInsert.error;
+        }
+      } catch (uploadError) {
+        setLoading(false);
+        return showNotice(
+          `História salva, mas não foi possível enviar as fotos: ${uploadError.message}`,
+          "error",
+        );
+      }
     }
     setLoading(false);
     setModal(false);
@@ -595,7 +702,9 @@ export default function App() {
               ? "locais_cidade"
               : page === "EmpresasTurismo"
                 ? "passeios"
-                : "categorias";
+                : page === "HistoriasCidade"
+                  ? "historias_cidade"
+                  : "categorias";
     const result = await supabase
       .from(table)
       .delete()
@@ -624,6 +733,7 @@ export default function App() {
   const activeServices = data.servicos.filter((x) => x.ativo).length;
   const activeCityPlaces = data.locaisCidade.filter((x) => x.ativo).length;
   const activeTours = data.passeios.filter((x) => x.ativo).length;
+  const activeHistorias = data.historias.filter((x) => x.ativo).length;
   return (
     <div className="app-shell">
       <aside className={menuOpen ? "sidebar open" : "sidebar"}>
@@ -705,7 +815,9 @@ export default function App() {
                             ? data.locaisCidade
                             : page === "EmpresasTurismo"
                               ? data.passeios
-                              : data.locais
+                              : page === "HistoriasCidade"
+                                ? data.historias
+                                : data.locais
                     ).length} no total`}
               </p>
             </div>
@@ -755,6 +867,12 @@ export default function App() {
                 <Stat value={activeTours} label="Passeios ativos" />
               </>
             )}
+            {page === "HistoriasCidade" && (
+              <>
+                <Stat value={data.historias.length} label="Histórias cadastradas" />
+                <Stat value={activeHistorias} label="Histórias ativas" />
+              </>
+            )}
             {page === "Categorias" && (
               <>
                 <Stat value={data.categorias.length} label="Categorias" />
@@ -772,7 +890,7 @@ export default function App() {
                   placeholder={`Buscar ${PAGE_META[page].label.toLowerCase()}...`}
                 />
               </div>
-              {page !== "Categorias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && (
+              {page !== "Categorias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && (
                 <div className="category-filters">
                   <button
                     className={
@@ -825,7 +943,9 @@ export default function App() {
           photos={
             page === "EmpresasTurismo"
               ? data.fotosPasseios.filter((photo) => photo.passeio_id === editingRecord?.id)
-              : data.fotos.filter((photo) => photo.local_id === editingRecord?.id)
+              : page === "HistoriasCidade"
+                ? data.fotosHistorias.filter((photo) => photo.historia_id === editingRecord?.id)
+                : data.fotos.filter((photo) => photo.local_id === editingRecord?.id)
           }
           close={() => {
             setModal(false);
@@ -1165,6 +1285,70 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
         {loading ? "Carregando dados..." : "Ainda não há passeios cadastrados."}
       </div>
     );
+  if (page === "HistoriasCidade")
+    return rows.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {["Nome", "Endereço", "Coordenadas", "Status", ""].map((x) => (
+                <th key={x}>{x}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.id}>
+                <td>
+                  <b>{x.nome}</b>
+                  {x.foto_capa_url && <small>com foto</small>}
+                </td>
+                <td>{x.endereco || "—"}</td>
+                <td>
+                  <small>{x.latitude?.toFixed(5)}, {x.longitude?.toFixed(5)}</small>
+                </td>
+                <td>
+                  <Status value={x.ativo ? "ativo" : "inativo"} />
+                </td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-button edit"
+                      onClick={() => onEdit(x)}
+                      title="Editar"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button delete"
+                      onClick={() => onDelete(x)}
+                      title="Excluir"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M6 6v14h12V6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty">
+        {loading ? "Carregando dados..." : "Ainda não há histórias cadastradas."}
+      </div>
+    );
   return (
     <div className="table-wrap">
       <table>
@@ -1389,7 +1573,8 @@ function Editor({
     isPlace = page === "Locais",
     isService = page === "ServicosLocais",
     isCityPlace = page === "LocaisCidade",
-    isTour = page === "EmpresasTurismo";
+    isTour = page === "EmpresasTurismo",
+    isHistoria = page === "HistoriasCidade";
   const [previewUrl, setPreviewUrl] = useState(record?.foto_capa_url || "");
   const [coverFile, setCoverFile] = useState(null);
   const [extraFiles, setExtraFiles] = useState([]);
@@ -2257,7 +2442,173 @@ function Editor({
                 </div>
               </>
             )}
-            {!isCompany && !isPlace && !isService && !isCityPlace && !isTour && (
+            {isHistoria && (
+              <>
+                <Field label="Nome do ponto histórico">
+                  <Input
+                    name="nome"
+                    defaultValue={record?.nome || ""}
+                    required
+                    placeholder="Ex.: Marco do Descobrimento"
+                  />
+                </Field>
+                <Field label="Endereço/referência">
+                  <Input
+                    name="endereco"
+                    defaultValue={record?.endereco || ""}
+                    placeholder="Rua, esquina, ponto de referência"
+                  />
+                </Field>
+                <Field label="História" full>
+                  <textarea
+                    name="historia"
+                    defaultValue={record?.historia || ""}
+                    placeholder="A história completa desse ponto — o que aconteceu aqui, curiosidades, contexto"
+                  />
+                </Field>
+                <ScheduleEditor
+                  value={record?.horario_funcionamento || ""}
+                  onChange={setScheduleValue}
+                />
+                <Field label="Link Google Maps" full>
+                  <Input
+                    name="link_google_maps"
+                    type="url"
+                    onChange={handleInputChange}
+                    onBlur={handleMapsLinkBlur}
+                    defaultValue={record?.link_google_maps || ""}
+                    placeholder="https://maps.google.com/?q=... (aceita link curto maps.app.goo.gl)"
+                  />
+                  {coordStatus && <small className="coord-status">{coordStatus}</small>}
+                </Field>
+                <Field label="Latitude (obrigatório)">
+                  <Input
+                    name="latitude"
+                    type="number"
+                    step="any"
+                    required
+                    defaultValue={
+                      record?.latitude ??
+                      extractLatLng(record?.link_google_maps || "").lat
+                    }
+                    placeholder="-16.44"
+                  />
+                </Field>
+                <Field label="Longitude (obrigatório)">
+                  <Input
+                    name="longitude"
+                    type="number"
+                    step="any"
+                    required
+                    defaultValue={
+                      record?.longitude ??
+                      extractLatLng(record?.link_google_maps || "").lng
+                    }
+                    placeholder="-39.07"
+                  />
+                </Field>
+                <Field label="Link curto (gerado automaticamente pelo nome)" full>
+                  <Input
+                    value={record?.link_google_maps_curto || "gerado ao salvar, a partir do nome do ponto histórico"}
+                    readOnly
+                    disabled
+                  />
+                </Field>
+                <Field full label="">
+                  <span className="check-line">
+                    <input
+                      name="ativo"
+                      type="checkbox"
+                      defaultChecked={record?.ativo ?? true}
+                    />{" "}
+                    História ativa e visível no Guia
+                  </span>
+                </Field>
+                <div className="photos-section full">
+                  <h3>Fotos</h3>
+                  <p className="photos-hint">
+                    A capa é a foto que o agente manda de início ao contar essa história; as
+                    extras aparecem quando o turista pede mais detalhes.
+                  </p>
+                  <div className="photo-cover-row">
+                    {previewUrl ? (
+                      <PhotoPreview
+                        src={previewUrl}
+                        alt="Foto de capa"
+                        cover
+                        removable={!!coverFile}
+                        onOpen={() => setExpandedImage(previewUrl)}
+                        onRemove={() => {
+                          setCoverFile(null);
+                          setPreviewUrl(record?.foto_capa_url || "");
+                        }}
+                      />
+                    ) : (
+                      <div className="photo-cover-empty">Sem foto de capa ainda</div>
+                    )}
+                  </div>
+                  {(photos.length > 0 || extraFiles.length > 0) && (
+                    <div className="photo-previews">
+                      {photos
+                        .filter((photo) => !deletedPhotoIds.includes(photo.id))
+                        .map((photo) => (
+                          <PhotoPreview
+                            key={photo.id}
+                            src={photo.url}
+                            alt={photo.legenda || "Foto do ponto histórico"}
+                            removable
+                            onOpen={() => setExpandedImage(photo.url)}
+                            onRemove={() =>
+                              setDeletedPhotoIds((current) => [...current, photo.id])
+                            }
+                          />
+                        ))}
+                      {extraFiles.map((file, index) => {
+                        const fileUrl = URL.createObjectURL(file);
+                        return (
+                          <PhotoPreview
+                            key={`${file.name}-${index}`}
+                            src={fileUrl}
+                            alt={file.name}
+                            removable
+                            onOpen={() => setExpandedImage(fileUrl)}
+                            onRemove={() =>
+                              setExtraFiles((current) =>
+                                current.filter((_, fileIndex) => fileIndex !== index),
+                              )
+                            }
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="photo-pickers">
+                    <PhotoPicker
+                      label={previewUrl ? "Trocar capa" : "Nova capa"}
+                      hint="Essa é a que o agente manda de início ao contar a história"
+                      files={coverFile ? [coverFile] : []}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setCoverFile(file);
+                        if (file) setPreviewUrl(URL.createObjectURL(file));
+                      }}
+                    />
+                    <PhotoPicker
+                      label="+ Fotos extras"
+                      hint="Mostradas quando o turista pede mais detalhes"
+                      multiple
+                      files={extraFiles}
+                      onChange={(event) =>
+                        setExtraFiles(
+                          Array.from(event.target.files || []).slice(0, 7),
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+            {!isCompany && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && (
               <>
                 <Field label="Nome">
                   <Input
