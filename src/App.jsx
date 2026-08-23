@@ -100,6 +100,27 @@ function Field({ label, children, full = false }) {
 function Input(props) {
   return <input {...props} />;
 }
+// Regiao do Guia Porto — pedido do Sr. Vitor (23/08): toda empresa/local precisa dizer
+// explicitamente a cidade na hora do cadastro (antes so o scraper preenchia isso as vezes
+// errado, ex: negocio em Arraial ficando marcado como Porto Seguro so porque o endereco do
+// Google cita o municipio "Porto Seguro" mesmo pra bairros de Arraial).
+const CIDADES_REGIAO = ["Porto Seguro", "Santa Cruz Cabrália", "Arraial d Ajuda", "Trancoso"];
+function CityField({ defaultValue, required = false }) {
+  return (
+    <Field label="Cidade">
+      <select name="cidade" defaultValue={defaultValue || ""} required={required}>
+        <option value="" disabled>
+          Selecione a cidade
+        </option>
+        {CIDADES_REGIAO.map((c) => (
+          <option value={c} key={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
 function Stat({ value, label }) {
   return (
     <div className="stat">
@@ -389,6 +410,7 @@ export default function App() {
         descricao: values.descricao || null,
         historia: values.historia || null,
         endereco: values.endereco || null,
+        cidade: values.cidade || null,
         latitude: values.latitude ? Number(values.latitude) : null,
         longitude: values.longitude ? Number(values.longitude) : null,
         faixa_preco: values.faixa_preco || null,
@@ -413,6 +435,7 @@ export default function App() {
         descricao: values.descricao || null,
         dica: values.dica || null,
         endereco: values.endereco || null,
+        cidade: values.cidade || null,
         latitude: values.latitude ? Number(values.latitude) : null,
         longitude: values.longitude ? Number(values.longitude) : null,
         valor: values.valor || null,
@@ -434,6 +457,7 @@ export default function App() {
         tipo_local: values.tipo_local,
         descricao: values.descricao || null,
         endereco: values.endereco || null,
+        cidade: values.cidade || null,
         latitude: Number(values.latitude),
         longitude: Number(values.longitude),
         foto_capa_url: values.foto_capa_url || null,
@@ -451,6 +475,7 @@ export default function App() {
         descricao: values.descricao || null,
         valor: values.valor || null,
         endereco: values.endereco || null,
+        cidade: values.cidade || null,
         latitude: values.latitude ? Number(values.latitude) : null,
         longitude: values.longitude ? Number(values.longitude) : null,
         telefone: values.telefone || null,
@@ -469,6 +494,7 @@ export default function App() {
         nome: values.nome,
         historia: values.historia || null,
         endereco: values.endereco || null,
+        cidade: values.cidade || null,
         latitude: Number(values.latitude),
         longitude: Number(values.longitude),
         horario_funcionamento: values.horario_funcionamento || null,
@@ -2154,6 +2180,7 @@ function Editor({
                     placeholder="Rua, número, bairro"
                   />
                 </Field>
+                <CityField defaultValue={record?.cidade} required />
                 <Field label="Telefone">
                   <Input
                     name="telefone"
@@ -2362,6 +2389,7 @@ function Editor({
                     placeholder="Rua, número, bairro"
                   />
                 </Field>
+                <CityField defaultValue={record?.cidade} required />
                 <Field label="Telefone">
                   <Input
                     name="telefone"
@@ -2502,6 +2530,7 @@ function Editor({
                     placeholder="Rua, esquina, ponto de referência"
                   />
                 </Field>
+                <CityField defaultValue={record?.cidade} required />
                 <Field label="Link Google Maps (opcional, só pra ajudar a pegar lat/lon)" full>
                   <Input
                     name="link_google_maps"
@@ -2631,6 +2660,7 @@ function Editor({
                     placeholder="Rua, número, bairro"
                   />
                 </Field>
+                <CityField defaultValue={record?.cidade} required />
                 <Field label="Telefone">
                   <Input
                     name="telefone"
@@ -2795,6 +2825,7 @@ function Editor({
                     placeholder="Rua, esquina, ponto de referência"
                   />
                 </Field>
+                <CityField defaultValue={record?.cidade} required />
                 <Field label="História" full>
                   <textarea
                     name="historia"
@@ -3026,20 +3057,7 @@ function Editor({
                     <option value="mercado" />
                   </datalist>
                 </Field>
-                <Field label="Cidade">
-                  <Input
-                    name="cidade"
-                    defaultValue={record?.cidade || ""}
-                    placeholder="Ex.: Porto Seguro"
-                    list="cidades-sugeridas"
-                  />
-                  <datalist id="cidades-sugeridas">
-                    <option value="Porto Seguro" />
-                    <option value="Santa Cruz Cabrália" />
-                    <option value="Arraial d Ajuda" />
-                    <option value="Trancoso" />
-                  </datalist>
-                </Field>
+                <CityField defaultValue={record?.cidade} required />
                 <Field label="Descrição" full>
                   <textarea
                     name="descricao"
