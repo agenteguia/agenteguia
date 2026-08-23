@@ -1,5 +1,26 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ListChecks, Tag, Bus, MapPin, Compass, Landmark, CreditCard } from "lucide-react";
+import {
+  Building2, ListChecks, Tag, Bus, MapPin, Compass, Landmark, CreditCard,
+  Waves, Umbrella, UtensilsCrossed, Coffee, BedDouble, Hotel, Martini, Wine, Beer,
+  TreePine, Leaf, Mountain, Wrench, ConciergeBell, ShoppingBag, Camera, Music,
+  Ship, Anchor, Car, Bike, Sun, Fish, PartyPopper, Store, Backpack, Tent, HelpCircle,
+} from "lucide-react";
+
+// Registro de icones pra categoria — trocado de emoji livre (dificil de manter consistente
+// entre dispositivos) pra um conjunto fixo de icones (lucide-react), a pedido do Sr. Vitor
+// (22/08). "icone" na tabela categorias agora guarda a CHAVE deste objeto (ex: "Waves"),
+// nao mais um emoji. CategoryIcon faz o lookup com fallback pra Tag se a chave nao existir
+// (categoria antiga com emoji nao migrado, ou chave invalida).
+const CATEGORY_ICONS = {
+  Waves, Umbrella, UtensilsCrossed, Coffee, BedDouble, Hotel, Martini, Wine, Beer,
+  Landmark, TreePine, Leaf, Mountain, Wrench, ConciergeBell, ShoppingBag, Camera,
+  Music, Ship, Anchor, Car, Bike, MapPin, Compass, Sun, Fish, PartyPopper, Store,
+  Backpack, Tent, Bus, Building2, Tag,
+};
+function CategoryIcon({ name, size = 18, ...props }) {
+  const Icon = CATEGORY_ICONS[name] || HelpCircle;
+  return <Icon size={size} {...props} />;
+}
 import { supabase } from "./supabase.js";
 
 // "Locais" (fisico, o que o Guia Porto recomenda) virou "Empresas" no menu, e o
@@ -91,6 +112,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Todas");
+  const [cityFilter, setCityFilter] = useState("Todas");
   const [modal, setModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -276,9 +298,28 @@ export default function App() {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return categoryMatches && searchable.includes(normalizedSearch);
+      // Cidade so existe como coluna propria em "Locais" — filtro de cidade (com
+      // contagem, pedido do Sr. Vitor 23/08) so se aplica nessa pagina.
+      const cityMatches =
+        page !== "Locais" || cityFilter === "Todas" || item.cidade === cityFilter;
+      return categoryMatches && cityMatches && searchable.includes(normalizedSearch);
     });
-  }, [data, page, search, categoryFilter]);
+  }, [data, page, search, categoryFilter, cityFilter]);
+
+  // Contagem por cidade DENTRO da categoria selecionada (muda a lista de cidades e os
+  // numeros quando troca de categoria) — so relevante pra "Locais".
+  const cityCounts = useMemo(() => {
+    if (page !== "Locais") return [];
+    const doCategoria = data.locais.filter(
+      (l) => categoryFilter === "Todas" || l.categoria_id === categoryFilter,
+    );
+    const counts = {};
+    for (const l of doCategoria) {
+      const cidade = l.cidade || "Sem cidade";
+      counts[cidade] = (counts[cidade] || 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [data.locais, page, categoryFilter]);
   const subtitles = {
     Empresas: "Gerencie os parceiros e negócios da plataforma.",
     Locais: "Organize os lugares que o Guia Porto recomenda.",
@@ -810,6 +851,7 @@ export default function App() {
                   setMenuOpen(false);
                   setSearch("");
                   setCategoryFilter("Todas");
+                  setCityFilter("Todas");
                 }}
               >
                 <Icon size={17} strokeWidth={2} />
@@ -966,7 +1008,26 @@ export default function App() {
                       key={category.id}
                       onClick={() => setCategoryFilter(category.id)}
                     >
-                      {category.icone || "◇"} {category.nome}
+                      <CategoryIcon name={category.icone} size={15} /> {category.nome}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {page === "Locais" && cityCounts.length > 0 && (
+                <div className="city-filters">
+                  <button
+                    className={cityFilter === "Todas" ? "category-filter active" : "category-filter"}
+                    onClick={() => setCityFilter("Todas")}
+                  >
+                    Todas as cidades ({cityCounts.reduce((soma, [, n]) => soma + n, 0)})
+                  </button>
+                  {cityCounts.map(([cidade, n]) => (
+                    <button
+                      key={cidade}
+                      className={cityFilter === cidade ? "category-filter active" : "category-filter"}
+                      onClick={() => setCityFilter(cidade)}
+                    >
+                      {cidade} ({n})
                     </button>
                   ))}
                 </div>
@@ -1036,7 +1097,9 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
       <div className="category-grid">
         {rows.map((x) => (
           <article className="category-card" key={x.id}>
-            <div className="category-icon">{x.icone || "◇"}</div>
+            <div className="category-icon">
+              <CategoryIcon name={x.icone} size={20} />
+            </div>
             <div>
               <b>{x.nome}</b>
               <p>Ordem de exibição: {x.ordem}</p>
@@ -1706,6 +1769,9 @@ function Editor({
   const [scheduleValue, setScheduleValue] = useState(record?.horario_funcionamento || "");
   const [formValues, setFormValues] = useState({});
   const [expandedImage, setExpandedImage] = useState(null);
+  const [iconeEscolhido, setIconeEscolhido] = useState(
+    record?.icone && CATEGORY_ICONS[record.icone] ? record.icone : "Tag",
+  );
 
   const handleInputChange = (e) => {
     if (e.target.name === "foto_capa_url") setPreviewUrl(e.target.value);
@@ -2799,12 +2865,21 @@ function Editor({
                     placeholder="Ex.: Restaurantes"
                   />
                 </Field>
-                <Field label="Ícone">
-                  <Input
-                    name="icone"
-                    defaultValue={record?.icone || ""}
-                    placeholder="Emoji ou nome do ícone"
-                  />
+                <Field label="Ícone" full>
+                  <input type="hidden" name="icone" value={iconeEscolhido} />
+                  <div className="icon-picker">
+                    {Object.keys(CATEGORY_ICONS).map((key) => (
+                      <button
+                        type="button"
+                        key={key}
+                        title={key}
+                        className={key === iconeEscolhido ? "icon-picker-option active" : "icon-picker-option"}
+                        onClick={() => setIconeEscolhido(key)}
+                      >
+                        <CategoryIcon name={key} size={18} />
+                      </button>
+                    ))}
+                  </div>
                 </Field>
                 <Field label="Ordem de exibição">
                   <Input
