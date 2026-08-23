@@ -80,6 +80,15 @@ function gerarSlug(nome) {
     .replace(/\s+/g, "-");
 }
 
+// Busca precisa ignorar acento \u2014 "gaucho" tem que achar "Ga\u00facho" (bug real, 23/08: usuario
+// procurou sem acento e nao achou um negocio que na verdade estava cadastrado certinho).
+function semAcento(texto) {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function Field({ label, children, full = false }) {
   return (
     <label className={full ? "field full" : "field"}>
@@ -270,7 +279,7 @@ export default function App() {
                     : page === "ServicosGerais"
                       ? data.servicosGerais
                       : data.categorias;
-    const normalizedSearch = search.toLowerCase().trim();
+    const normalizedSearch = semAcento(search.trim());
     return list.filter((item) => {
       // ServicosLocais/LocaisCidade/EmpresasTurismo/HistoriasCidade/Assinantes/ServicosGerais
       // nao tem categoria_id (usam tipo_servico/tipo_local/nome_empresa/status, sem filtro
@@ -311,15 +320,15 @@ export default function App() {
         linkedPlace?.descricao,
       ]
         .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+        .join(" ");
+      const searchableNormalizado = semAcento(searchable);
       // Cidade so existe como coluna propria em "Locais" — filtro de cidade (com
       // contagem, pedido do Sr. Vitor 23/08) so se aplica nessa pagina.
       const cityMatches =
         page !== "Locais" ||
         cityFilter === "Todas" ||
         (cityFilter === "Sem cidade" ? !item.cidade : item.cidade === cityFilter);
-      return categoryMatches && cityMatches && searchable.includes(normalizedSearch);
+      return categoryMatches && cityMatches && searchableNormalizado.includes(normalizedSearch);
     });
   }, [data, page, search, categoryFilter, cityFilter]);
 
