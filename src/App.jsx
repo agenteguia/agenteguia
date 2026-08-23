@@ -301,7 +301,9 @@ export default function App() {
       // Cidade so existe como coluna propria em "Locais" — filtro de cidade (com
       // contagem, pedido do Sr. Vitor 23/08) so se aplica nessa pagina.
       const cityMatches =
-        page !== "Locais" || cityFilter === "Todas" || item.cidade === cityFilter;
+        page !== "Locais" ||
+        cityFilter === "Todas" ||
+        (cityFilter === "Sem cidade" ? !item.cidade : item.cidade === cityFilter);
       return categoryMatches && cityMatches && searchable.includes(normalizedSearch);
     });
   }, [data, page, search, categoryFilter, cityFilter]);
