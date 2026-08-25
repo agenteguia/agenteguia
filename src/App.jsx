@@ -137,6 +137,8 @@ function Status({ value }) {
     recusado: "Recusada",
     inativo: "Inativo",
     cancelado: "Cancelada",
+    trial: "Trial",
+    pendente: "Pendente",
   };
   return <span className={`status ${value}`}>{labels[value] || value}</span>;
 }
@@ -510,7 +512,7 @@ export default function App() {
       payload = {
         turista_id: values.turista_id,
         plano_id: values.plano_id || null,
-        status: values.status || "ativo",
+        status: values.status || "trial",
         inicio_em: values.inicio_em ? new Date(values.inicio_em).toISOString() : null,
         fim_em: values.fim_em ? new Date(values.fim_em).toISOString() : null,
         renovar_lembrete: values.renovar_lembrete === "on",
@@ -916,7 +918,8 @@ export default function App() {
   const activeTours = data.passeios.filter((x) => x.ativo).length;
   const activeHistorias = data.historias.filter((x) => x.ativo).length;
   const activeAssinaturas = data.assinaturas.filter((x) => x.status === "ativo").length;
-  const inadimplentesAssinaturas = data.assinaturas.filter((x) => x.status === "inadimplente").length;
+  const trialAssinaturas = data.assinaturas.filter((x) => x.status === "trial").length;
+  const pendentesAssinaturas = data.assinaturas.filter((x) => x.status === "pendente").length;
   const activeServicosGerais = data.servicosGerais.filter((x) => x.ativo).length;
   return (
     <div className="app-shell">
@@ -1071,8 +1074,9 @@ export default function App() {
             {page === "Assinantes" && (
               <>
                 <Stat value={data.assinaturas.length} label="Assinaturas no total" />
-                <Stat value={activeAssinaturas} label="Ativas" />
-                <Stat value={inadimplentesAssinaturas} label="Inadimplentes" />
+                <Stat value={trialAssinaturas} label="Em teste" />
+                <Stat value={activeAssinaturas} label="Ativas (pagas)" />
+                <Stat value={pendentesAssinaturas} label="Pendentes" />
               </>
             )}
             {page === "ServicosGerais" && (
@@ -3000,9 +3004,10 @@ function Editor({
                   </select>
                 </Field>
                 <Field label="Status">
-                  <select name="status" defaultValue={record?.status || "ativo"}>
-                    <option value="ativo">Ativo</option>
-                    <option value="inadimplente">Inadimplente</option>
+                  <select name="status" defaultValue={record?.status || "trial"}>
+                    <option value="trial">Trial (teste)</option>
+                    <option value="pendente">Pendente (aguardando pagamento/renovação)</option>
+                    <option value="ativo">Ativo (pago)</option>
                     <option value="cancelado">Cancelado</option>
                   </select>
                 </Field>
