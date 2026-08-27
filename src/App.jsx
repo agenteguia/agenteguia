@@ -80,6 +80,63 @@ function gerarSlug(nome) {
     .replace(/\s+/g, "-");
 }
 
+// As 6 tabelas que geram link curto guiaporto.com.br/<slug> \u2014 TODAS dividem o MESMO
+// namespace de URL (o redirecionador consulta as 6, ver /opt/guiaporto-redirect na
+// VPS), entao um slug tem que ser unico entre elas, nao so dentro da propria tabela.
+const TABELAS_COM_SLUG = ["locais", "servicos_locais", "locais_cidade", "passeios", "historias_cidade", "servicos_gerais"];
+
+// Gera um slug garantidamente unico em TODAS as tabelas acima \u2014 achamos 2 colisoes
+// reais em producao 27/08 (dois negocios diferentes gerando o mesmo slug e brigando
+// pelo mesmo link curto, um deles ficava com o link quebrado sem ninguem perceber).
+// Tenta o slug base primeiro; se ja existir em qualquer uma das tabelas (menos no
+// proprio registro sendo editado), vai testando "-2", "-3" etc.
+async function gerarSlugUnico(nome, tabelaAtual, idAtual) {
+  const base = gerarSlug(nome);
+  let slug = base;
+  let sufixo = 2;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let colide = false;
+    for (const tabela of TABELAS_COM_SLUG) {
+      let query = supabase.from(tabela).select("id").eq("slug_nome", slug).limit(1);
+      if (tabela === tabelaAtual && idAtual) query = query.neq("id", idAtual);
+      const { data } = await query;
+      if (data && data.length) {
+        colide = true;
+        break;
+      }
+    }
+    if (!colide) return slug;
+    slug = `${base}-${sufixo}`;
+    sufixo++;
+  }
+}
+
+// Reduz fotos grandes (foto de celular costuma vir com 3-8MB) antes de subir — em
+// conexao ruim, um upload grande e a causa mais provavel do "às vezes sobe, às vezes
+// não" (reportado 27/08). Qualquer erro no processo cai no catch e devolve o arquivo
+// original (nunca trava o upload por causa da compressão). Não mexe em GIF, senão
+// perde a animação.
+async function comprimirImagem(file, maxDim = 1600, qualidade = 0.82) {
+  if (!file.type?.startsWith("image/") || file.type === "image/gif") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maior = Math.max(bitmap.width, bitmap.height);
+    if (maior <= maxDim && file.size < 1_500_000) return file;
+    const escala = Math.min(1, maxDim / maior);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * escala);
+    canvas.height = Math.round(bitmap.height * escala);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", qualidade));
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 // Busca precisa ignorar acento \u2014 "gaucho" tem que achar "Ga\u00facho" (bug real, 23/08: usuario
 // procurou sem acento e nao achou um negocio que na verdade estava cadastrado certinho).
 function semAcento(texto) {
@@ -159,7 +216,9 @@ export default function App() {
 
   const showNotice = (message, type = "success") => {
     setNotice({ message, type });
-    window.setTimeout(() => setNotice(null), 4200);
+    // Erro fica mais tempo na tela — 4.2s some rápido demais quando o aviso é sobre
+    // algo importante nao ter subido (ex.: foto), e a pessoa nao percebe a tempo.
+    window.setTimeout(() => setNotice(null), type === "error" ? 11000 : 4200);
   };
   const fetchTudo = useCallback(
     () =>
@@ -404,7 +463,7 @@ export default function App() {
       if (!editingRecord) payload.criado_em = new Date().toISOString();
     } else if (page === "Locais") {
       table = "locais";
-      const slug = gerarSlug(values.nome);
+      const slug = await gerarSlugUnico(values.nome, "locais", editingRecord?.id);
       payload = {
         categoria_id: values.categoria_id,
         empresa_id: values.empresa_id || null,
@@ -430,7 +489,7 @@ export default function App() {
       table = "servicos_locais";
       // Mesmo padrao do slug de Locais (guiaporto.com.br/<slug>) — link curto proprio em
       // vez de encurtador de terceiro, facilita o direcionamento do turista pro local.
-      const slug = gerarSlug(values.nome);
+      const slug = await gerarSlugUnico(values.nome, "servicos_locais", editingRecord?.id);
       payload = {
         nome: values.nome,
         tipo_servico: values.tipo_servico,
@@ -453,7 +512,7 @@ export default function App() {
       table = "locais_cidade";
       // Lat/lon aqui NAO e opcional (diferente de servicos_locais) — e' o dado essencial,
       // sem ele o ponto nao serve pra nada (nao tem como usar como referencia de distancia).
-      const slug = gerarSlug(values.nome);
+      const slug = await gerarSlugUnico(values.nome, "locais_cidade", editingRecord?.id);
       payload = {
         nome: values.nome,
         tipo_local: values.tipo_local,
@@ -470,7 +529,7 @@ export default function App() {
       };
     } else if (page === "EmpresasTurismo") {
       table = "passeios";
-      const slug = gerarSlug(values.nome);
+      const slug = await gerarSlugUnico(values.nome, "passeios", editingRecord?.id);
       payload = {
         nome: values.nome,
         nome_empresa: values.nome_empresa || null,
@@ -491,7 +550,7 @@ export default function App() {
       };
     } else if (page === "HistoriasCidade") {
       table = "historias_cidade";
-      const slug = gerarSlug(values.nome);
+      const slug = await gerarSlugUnico(values.nome, "historias_cidade", editingRecord?.id);
       payload = {
         nome: values.nome,
         historia: values.historia || null,
@@ -519,7 +578,7 @@ export default function App() {
       };
     } else if (page === "ServicosGerais") {
       table = "servicos_gerais";
-      const slug = gerarSlug(values.nome);
+      const slug = await gerarSlugUnico(values.nome, "servicos_gerais", editingRecord?.id);
       payload = {
         nome: values.nome,
         tipo_servico: values.tipo_servico || null,
@@ -570,7 +629,8 @@ export default function App() {
         const markerIndex = url?.indexOf(marker);
         return markerIndex === -1 ? null : decodeURIComponent(url.slice(markerIndex + marker.length));
       };
-      const uploadFile = async (file, folder) => {
+      const uploadFile = async (fileOriginal, folder) => {
+        const file = await comprimirImagem(fileOriginal);
         const extension = file.name.includes(".")
           ? `.${file.name.split(".").pop()}`
           : "";
@@ -631,7 +691,7 @@ export default function App() {
       // So capa aqui (sem galeria de extras) — mesmo bucket "locais", pasta propria
       // pra nao misturar com os arquivos de locais fisicos.
       const servicoId = editingRecord?.id || result.data.id;
-      const coverFile = values._coverFile;
+      const coverFile = await comprimirImagem(values._coverFile);
       const extension = coverFile.name.includes(".")
         ? `.${coverFile.name.split(".").pop()}`
         : "";
@@ -661,7 +721,7 @@ export default function App() {
     } else if (page === "LocaisCidade" && values._coverFile) {
       // Mesma logica de ServicosLocais — so capa, mesmo bucket "locais", pasta propria.
       const localCidadeId = editingRecord?.id || result.data.id;
-      const coverFile = values._coverFile;
+      const coverFile = await comprimirImagem(values._coverFile);
       const extension = coverFile.name.includes(".")
         ? `.${coverFile.name.split(".").pop()}`
         : "";
@@ -700,7 +760,8 @@ export default function App() {
         const markerIndex = url?.indexOf(marker);
         return markerIndex === -1 ? null : decodeURIComponent(url.slice(markerIndex + marker.length));
       };
-      const uploadFile = async (file, folder) => {
+      const uploadFile = async (fileOriginal, folder) => {
+        const file = await comprimirImagem(fileOriginal);
         const extension = file.name.includes(".")
           ? `.${file.name.split(".").pop()}`
           : "";
@@ -769,7 +830,8 @@ export default function App() {
         const markerIndex = url?.indexOf(marker);
         return markerIndex === -1 ? null : decodeURIComponent(url.slice(markerIndex + marker.length));
       };
-      const uploadFile = async (file, folder) => {
+      const uploadFile = async (fileOriginal, folder) => {
+        const file = await comprimirImagem(fileOriginal);
         const extension = file.name.includes(".")
           ? `.${file.name.split(".").pop()}`
           : "";
@@ -829,7 +891,7 @@ export default function App() {
     } else if (page === "ServicosGerais" && values._coverFile) {
       // So capa (sem galeria) — mesmo bucket "locais", pasta propria.
       const servicoGeralId = editingRecord?.id || result.data.id;
-      const coverFile = values._coverFile;
+      const coverFile = await comprimirImagem(values._coverFile);
       const extension = coverFile.name.includes(".") ? `.${coverFile.name.split(".").pop()}` : "";
       const path = `servico-geral-${servicoGeralId}/capa-${crypto.randomUUID()}${extension}`;
       const upload = await supabase.storage
@@ -2322,6 +2384,10 @@ function Editor({
                         const file = event.target.files?.[0] || null;
                         setCoverFile(file);
                         if (file) setPreviewUrl(URL.createObjectURL(file));
+                        // Permite escolher o MESMO arquivo de novo (ex.: reenviar apos um
+                        // erro de upload) — sem isso o navegador nao dispara onChange se a
+                        // selecao nao mudar.
+                        event.target.value = "";
                       }}
                     />
                     <PhotoPicker
@@ -2329,11 +2395,19 @@ function Editor({
                       hint="Mostradas quando o turista pede mais detalhes"
                       multiple
                       files={extraFiles}
-                      onChange={(event) =>
-                        setExtraFiles(
-                          Array.from(event.target.files || []).slice(0, 7),
-                        )
-                      }
+                      onChange={(event) => {
+                        // Antes SUBSTITUIA a selecao inteira — se a pessoa escolhia fotos
+                        // extras em dois momentos diferentes (dois cliques em "+ Fotos
+                        // extras"), a segunda selecao apagava a primeira sem avisar, e so
+                        // dava pra subir tudo se escolhesse todas de uma vez so (bug real,
+                        // reportado 27/08). Agora SOMA a nova selecao a que ja tinha.
+                        const novos = Array.from(event.target.files || []);
+                        setExtraFiles((current) => [...current, ...novos].slice(0, 7));
+                        // Limpa o input pra poder escolher o MESMO arquivo de novo depois
+                        // (ex.: reenviar apos um erro) — sem isso o navegador nao dispara
+                        // onChange de novo se a selecao nao mudar.
+                        event.target.value = "";
+                      }}
                     />
                   </div>
                 </div>
@@ -2488,6 +2562,10 @@ function Editor({
                         const file = event.target.files?.[0] || null;
                         setCoverFile(file);
                         if (file) setPreviewUrl(URL.createObjectURL(file));
+                        // Permite escolher o MESMO arquivo de novo (ex.: reenviar apos um
+                        // erro de upload) — sem isso o navegador nao dispara onChange se a
+                        // selecao nao mudar.
+                        event.target.value = "";
                       }}
                     />
                   </div>
@@ -2620,6 +2698,10 @@ function Editor({
                         const file = event.target.files?.[0] || null;
                         setCoverFile(file);
                         if (file) setPreviewUrl(URL.createObjectURL(file));
+                        // Permite escolher o MESMO arquivo de novo (ex.: reenviar apos um
+                        // erro de upload) — sem isso o navegador nao dispara onChange se a
+                        // selecao nao mudar.
+                        event.target.value = "";
                       }}
                     />
                   </div>
@@ -2795,6 +2877,10 @@ function Editor({
                         const file = event.target.files?.[0] || null;
                         setCoverFile(file);
                         if (file) setPreviewUrl(URL.createObjectURL(file));
+                        // Permite escolher o MESMO arquivo de novo (ex.: reenviar apos um
+                        // erro de upload) — sem isso o navegador nao dispara onChange se a
+                        // selecao nao mudar.
+                        event.target.value = "";
                       }}
                     />
                     <PhotoPicker
@@ -2802,11 +2888,19 @@ function Editor({
                       hint="Mostradas quando o turista pede mais detalhes"
                       multiple
                       files={extraFiles}
-                      onChange={(event) =>
-                        setExtraFiles(
-                          Array.from(event.target.files || []).slice(0, 7),
-                        )
-                      }
+                      onChange={(event) => {
+                        // Antes SUBSTITUIA a selecao inteira — se a pessoa escolhia fotos
+                        // extras em dois momentos diferentes (dois cliques em "+ Fotos
+                        // extras"), a segunda selecao apagava a primeira sem avisar, e so
+                        // dava pra subir tudo se escolhesse todas de uma vez so (bug real,
+                        // reportado 27/08). Agora SOMA a nova selecao a que ja tinha.
+                        const novos = Array.from(event.target.files || []);
+                        setExtraFiles((current) => [...current, ...novos].slice(0, 7));
+                        // Limpa o input pra poder escolher o MESMO arquivo de novo depois
+                        // (ex.: reenviar apos um erro) — sem isso o navegador nao dispara
+                        // onChange de novo se a selecao nao mudar.
+                        event.target.value = "";
+                      }}
                     />
                   </div>
                 </div>
@@ -2962,6 +3056,10 @@ function Editor({
                         const file = event.target.files?.[0] || null;
                         setCoverFile(file);
                         if (file) setPreviewUrl(URL.createObjectURL(file));
+                        // Permite escolher o MESMO arquivo de novo (ex.: reenviar apos um
+                        // erro de upload) — sem isso o navegador nao dispara onChange se a
+                        // selecao nao mudar.
+                        event.target.value = "";
                       }}
                     />
                     <PhotoPicker
@@ -2969,11 +3067,19 @@ function Editor({
                       hint="Mostradas quando o turista pede mais detalhes"
                       multiple
                       files={extraFiles}
-                      onChange={(event) =>
-                        setExtraFiles(
-                          Array.from(event.target.files || []).slice(0, 7),
-                        )
-                      }
+                      onChange={(event) => {
+                        // Antes SUBSTITUIA a selecao inteira — se a pessoa escolhia fotos
+                        // extras em dois momentos diferentes (dois cliques em "+ Fotos
+                        // extras"), a segunda selecao apagava a primeira sem avisar, e so
+                        // dava pra subir tudo se escolhesse todas de uma vez so (bug real,
+                        // reportado 27/08). Agora SOMA a nova selecao a que ja tinha.
+                        const novos = Array.from(event.target.files || []);
+                        setExtraFiles((current) => [...current, ...novos].slice(0, 7));
+                        // Limpa o input pra poder escolher o MESMO arquivo de novo depois
+                        // (ex.: reenviar apos um erro) — sem isso o navegador nao dispara
+                        // onChange de novo se a selecao nao mudar.
+                        event.target.value = "";
+                      }}
                     />
                   </div>
                 </div>
@@ -3171,6 +3277,10 @@ function Editor({
                         const file = event.target.files?.[0] || null;
                         setCoverFile(file);
                         if (file) setPreviewUrl(URL.createObjectURL(file));
+                        // Permite escolher o MESMO arquivo de novo (ex.: reenviar apos um
+                        // erro de upload) — sem isso o navegador nao dispara onChange se a
+                        // selecao nao mudar.
+                        event.target.value = "";
                       }}
                     />
                   </div>
