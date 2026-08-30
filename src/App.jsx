@@ -211,6 +211,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Todas");
   const [cityFilter, setCityFilter] = useState("Todas");
+  const [vehicleFilter, setVehicleFilter] = useState("Todas");
   const [modal, setModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -417,19 +418,32 @@ export default function App() {
         .filter(Boolean)
         .join(" ");
       const searchableNormalizado = semAcento(searchable);
-      // Cidade so existe como coluna propria em "Locais" — filtro de cidade (com
-      // contagem, pedido do Sr. Vitor 23/08) so se aplica nessa pagina.
+      // Cidade existe como coluna propria em "Locais" e em "LotacaoParcerias" — filtro
+      // de cidade (com contagem) so se aplica nessas duas paginas.
       const cityMatches =
-        page !== "Locais" ||
+        (page !== "Locais" && page !== "LotacaoParcerias") ||
         cityFilter === "Todas" ||
         (cityFilter === "Sem cidade" ? !item.cidade : item.cidade === cityFilter);
-      return categoryMatches && cityMatches && searchableNormalizado.includes(normalizedSearch);
+      // Filtro de tipo de veiculo (Carro/Moto) — so existe em "LotacaoParcerias".
+      const vehicleMatches =
+        page !== "LotacaoParcerias" ||
+        vehicleFilter === "Todas" ||
+        (vehicleFilter === "Sem tipo" ? !item.tipo_veiculo : item.tipo_veiculo === vehicleFilter);
+      return categoryMatches && cityMatches && vehicleMatches && searchableNormalizado.includes(normalizedSearch);
     });
-  }, [data, page, search, categoryFilter, cityFilter]);
+  }, [data, page, search, categoryFilter, cityFilter, vehicleFilter]);
 
   // Contagem por cidade DENTRO da categoria selecionada (muda a lista de cidades e os
   // numeros quando troca de categoria) — so relevante pra "Locais".
   const cityCounts = useMemo(() => {
+    if (page === "LotacaoParcerias") {
+      const counts = {};
+      for (const l of data.lotacaoParcerias) {
+        const cidade = l.cidade || "Sem cidade";
+        counts[cidade] = (counts[cidade] || 0) + 1;
+      }
+      return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    }
     if (page !== "Locais") return [];
     const doCategoria = data.locais.filter(
       (l) => categoryFilter === "Todas" || l.categoria_id === categoryFilter,
@@ -440,7 +454,16 @@ export default function App() {
       counts[cidade] = (counts[cidade] || 0) + 1;
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  }, [data.locais, page, categoryFilter]);
+  }, [data.locais, data.lotacaoParcerias, page, categoryFilter]);
+  const vehicleCounts = useMemo(() => {
+    if (page !== "LotacaoParcerias") return [];
+    const counts = {};
+    for (const l of data.lotacaoParcerias) {
+      const tipo = l.tipo_veiculo || "Sem tipo";
+      counts[tipo] = (counts[tipo] || 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [data.lotacaoParcerias, page]);
   const subtitles = {
     Empresas: "Gerencie os parceiros e negócios da plataforma.",
     LotacaoParcerias: "Motoristas parceiros de lotação (Uber, 99, moto-táxi) que o turista pode chamar direto pelo WhatsApp.",
@@ -1110,7 +1133,9 @@ export default function App() {
                   : `${(
                       page === "Empresas"
                         ? data.empresas
-                        : page === "ServicosLocais"
+                        : page === "LotacaoParcerias"
+                          ? data.lotacaoParcerias
+                          : page === "ServicosLocais"
                           ? data.servicos
                           : page === "LocaisCidade"
                             ? data.locaisCidade
@@ -1209,7 +1234,7 @@ export default function App() {
                   placeholder={`Buscar ${PAGE_META[page].label.toLowerCase()}...`}
                 />
               </div>
-              {page !== "Categorias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && page !== "Assinantes" && page !== "ServicosGerais" && (
+              {page !== "Categorias" && page !== "LotacaoParcerias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && page !== "Assinantes" && page !== "ServicosGerais" && (
                 <div className="category-filters">
                   <button
                     className={
@@ -1236,7 +1261,7 @@ export default function App() {
                   ))}
                 </div>
               )}
-              {page === "Locais" && cityCounts.length > 0 && (
+              {(page === "Locais" || page === "LotacaoParcerias") && cityCounts.length > 0 && (
                 <div className="city-filters">
                   <button
                     className={cityFilter === "Todas" ? "category-filter active" : "category-filter"}
@@ -1251,6 +1276,25 @@ export default function App() {
                       onClick={() => setCityFilter(cidade)}
                     >
                       {cidade} ({n})
+                    </button>
+                  ))}
+                </div>
+              )}
+              {page === "LotacaoParcerias" && vehicleCounts.length > 0 && (
+                <div className="city-filters">
+                  <button
+                    className={vehicleFilter === "Todas" ? "category-filter active" : "category-filter"}
+                    onClick={() => setVehicleFilter("Todas")}
+                  >
+                    Todos os veículos ({vehicleCounts.reduce((soma, [, n]) => soma + n, 0)})
+                  </button>
+                  {vehicleCounts.map(([tipo, n]) => (
+                    <button
+                      key={tipo}
+                      className={vehicleFilter === tipo ? "category-filter active" : "category-filter"}
+                      onClick={() => setVehicleFilter(tipo)}
+                    >
+                      {tipo} ({n})
                     </button>
                   ))}
                 </div>
@@ -2303,8 +2347,8 @@ function Editor({
                     <option value="" disabled>
                       Selecione
                     </option>
-                    <option value="Carro">Carro (Uber/99)</option>
-                    <option value="Moto-táxi">Moto-táxi</option>
+                    <option value="Carro">Carro</option>
+                    <option value="Moto">Moto</option>
                   </select>
                 </Field>
                 <Field label="Placa do veículo">
