@@ -58,6 +58,7 @@ import { supabase } from "./supabase.js";
 // automatizar a criacao/atualizacao fica pra depois, combinado com o Sr. Vitor.
 const PAGE_META = {
   Empresas: { label: "Empresas parceiras", singular: "Empresa parceira", Icon: Building2 },
+  LotacaoParcerias: { label: "Lotação Parcerias", singular: "Motorista parceiro", Icon: Car },
   Locais: { label: "Empresas", singular: "Empresa", Icon: ListChecks },
   ServicosLocais: { label: "Serviços Locais", singular: "Serviço local", Icon: Bus },
   LocaisCidade: { label: "Locais da Cidade", singular: "Local da cidade", Icon: MapPin },
@@ -67,8 +68,8 @@ const PAGE_META = {
   Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
   Assinantes: { label: "Assinantes", singular: "Assinatura", Icon: CreditCard },
 };
-const nav = ["Empresas", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Categorias", "Assinantes"];
-const emptyData = { categorias: [], empresas: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [], servicosGerais: [] };
+const nav = ["Empresas", "LotacaoParcerias", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Categorias", "Assinantes"];
+const emptyData = { categorias: [], empresas: [], lotacaoParcerias: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [], servicosGerais: [] };
 
 function gerarSlug(nome) {
   return nome
@@ -196,6 +197,8 @@ function Status({ value }) {
     cancelado: "Cancelada",
     trial: "Trial",
     pendente: "Pendente",
+    disponivel: "Disponível",
+    indisponivel: "Indisponível",
   };
   return <span className={`status ${value}`}>{labels[value] || value}</span>;
 }
@@ -231,6 +234,10 @@ export default function App() {
           .from("empresas")
           .select("*, categoria:categorias(nome)")
           .order("criado_em", { ascending: false }),
+        supabase
+          .from("lotacao_parcerias")
+          .select("*")
+          .order("nome", { ascending: true }),
         supabase
           .from("locais")
           .select(
@@ -288,8 +295,8 @@ export default function App() {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    let [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais] = await fetchTudo();
-    let error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error;
+    let [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais] = await fetchTudo();
+    let error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error;
     // O token de sessao pode estar momentaneamente expirado logo apos o login ou
     // depois da aba ficar em segundo plano — isso aparece como erro de JWT na
     // primeira carga. Em vez de mostrar erro pro usuario, forca um refresh da
@@ -297,8 +304,8 @@ export default function App() {
     if (error && /jwt|token/i.test(error.message || "")) {
       const { error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError) {
-        [categorias, empresas, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais] = await fetchTudo();
-        error = categorias.error || empresas.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error;
+        [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais] = await fetchTudo();
+        error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error;
       }
     }
     if (error)
@@ -310,6 +317,7 @@ export default function App() {
       setData({
         categorias: categorias.data || [],
         empresas: empresas.data || [],
+        lotacaoParcerias: lotacaoParcerias.data || [],
         locais: locais.data || [],
         fotos: fotos.data || [],
         servicos: servicos.data || [],
@@ -346,8 +354,10 @@ export default function App() {
     const list =
       page === "Empresas"
         ? data.empresas
-        : page === "Locais"
-          ? data.locais
+        : page === "LotacaoParcerias"
+          ? data.lotacaoParcerias
+          : page === "Locais"
+            ? data.locais
           : page === "ServicosLocais"
             ? data.servicos
             : page === "LocaisCidade"
@@ -368,6 +378,7 @@ export default function App() {
       // dedicado ainda — busca por texto ja cobre, ver "searchable" abaixo).
       const categoryMatches =
         page === "Categorias" ||
+        page === "LotacaoParcerias" ||
         page === "ServicosLocais" ||
         page === "LocaisCidade" ||
         page === "EmpresasTurismo" ||
@@ -392,6 +403,8 @@ export default function App() {
         item.categoria?.nome,
         item.tipo_servico,
         item.tipo_local,
+        item.tipo_veiculo,
+        item.placa,
         item.dica,
         item.valor,
         item.status,
@@ -430,6 +443,7 @@ export default function App() {
   }, [data.locais, page, categoryFilter]);
   const subtitles = {
     Empresas: "Gerencie os parceiros e negócios da plataforma.",
+    LotacaoParcerias: "Motoristas parceiros de lotação (Uber, 99, moto-táxi) que o turista pode chamar direto pelo WhatsApp.",
     Locais: "Organize os lugares que o Guia Porto recomenda.",
     ServicosLocais: "Balsa, lotação, van e outros serviços da região — dado que o agente não consegue confirmar por API, curamos aqui.",
     LocaisCidade: "Pontos de referência que não aparecem no Google Maps nem no OSM — ponto de ônibus, lotação, van, pontos pouco conhecidos.",
@@ -461,6 +475,19 @@ export default function App() {
         status: values.status,
       };
       if (!editingRecord) payload.criado_em = new Date().toISOString();
+    } else if (page === "LotacaoParcerias") {
+      table = "lotacao_parcerias";
+      payload = {
+        nome: values.nome,
+        tipo_veiculo: values.tipo_veiculo || null,
+        placa: values.placa || null,
+        telefone: values.telefone || null,
+        cidade: values.cidade || null,
+        disponivel: values.disponivel === "on",
+        dica: values.dica || null,
+        ativo: values.ativo === "on",
+        atualizado_em: new Date().toISOString(),
+      };
     } else if (page === "Locais") {
       table = "locais";
       const slug = await gerarSlugUnico(values.nome, "locais", editingRecord?.id);
@@ -910,6 +937,28 @@ export default function App() {
         setLoading(false);
         return showNotice(`Serviço salvo, mas não foi possível salvar a foto: ${coverUpdate.error.message}`, "error");
       }
+    } else if (page === "LotacaoParcerias" && values._coverFile) {
+      // So a foto do motorista, sem galeria — mesmo bucket "locais", pasta propria.
+      const motoristaId = editingRecord?.id || result.data.id;
+      const coverFile = await comprimirImagem(values._coverFile);
+      const extension = coverFile.name.includes(".") ? `.${coverFile.name.split(".").pop()}` : "";
+      const path = `lotacao-${motoristaId}/capa-${crypto.randomUUID()}${extension}`;
+      const upload = await supabase.storage
+        .from("locais")
+        .upload(path, coverFile, { upsert: false, contentType: coverFile.type || undefined });
+      if (upload.error) {
+        setLoading(false);
+        return showNotice(`Motorista salvo, mas não foi possível enviar a foto: ${upload.error.message}`, "error");
+      }
+      const coverUrl = supabase.storage.from("locais").getPublicUrl(path).data.publicUrl;
+      const coverUpdate = await supabase
+        .from("lotacao_parcerias")
+        .update({ foto_capa_url: coverUrl, atualizado_em: new Date().toISOString() })
+        .eq("id", motoristaId);
+      if (coverUpdate.error) {
+        setLoading(false);
+        return showNotice(`Motorista salvo, mas não foi possível salvar a foto: ${coverUpdate.error.message}`, "error");
+      }
     }
     setLoading(false);
     setModal(false);
@@ -935,7 +984,9 @@ export default function App() {
     const table =
       page === "Empresas"
         ? "empresas"
-        : page === "Locais"
+        : page === "LotacaoParcerias"
+          ? "lotacao_parcerias"
+          : page === "Locais"
           ? "locais"
           : page === "ServicosLocais"
             ? "servicos_locais"
@@ -1082,7 +1133,7 @@ export default function App() {
                 setModal(true);
               }}
             >
-              ＋ {page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" ? "Novo" : "Nova"} {PAGE_META[page].singular}
+              ＋ {page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" || page === "LotacaoParcerias" ? "Novo" : "Nova"} {PAGE_META[page].singular}
             </button>
           </div>
           <div className="stats">
@@ -1640,6 +1691,75 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
         {loading ? "Carregando dados..." : "Ainda não há histórias cadastradas."}
       </div>
     );
+  if (page === "LotacaoParcerias")
+    return rows.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {["Motorista", "Tipo", "Placa", "Telefone", "Cidade", "Disponibilidade", "Status", ""].map((x) => (
+                <th key={x}>{x}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.id}>
+                <td>
+                  <b>{x.nome}</b>
+                  {x.foto_capa_url && <small>com foto</small>}
+                </td>
+                <td>
+                  <span className="pill">{x.tipo_veiculo || "—"}</span>
+                </td>
+                <td>{x.placa || "—"}</td>
+                <td>{x.telefone || "—"}</td>
+                <td>{x.cidade || "—"}</td>
+                <td>
+                  <Status value={x.disponivel ? "disponivel" : "indisponivel"} />
+                </td>
+                <td>
+                  <Status value={x.ativo ? "ativo" : "inativo"} />
+                </td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-button edit"
+                      onClick={() => onEdit(x)}
+                      title="Editar"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button delete"
+                      onClick={() => onDelete(x)}
+                      title="Excluir"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M6 6v14h12V6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty">
+        {loading ? "Carregando dados..." : "Ainda não há motoristas parceiros cadastrados."}
+      </div>
+    );
   if (page === "ServicosGerais")
     return rows.length ? (
       <div className="table-wrap">
@@ -1993,6 +2113,7 @@ function Editor({
   loading,
 }) {
   const isCompany = page === "Empresas",
+    isLotacao = page === "LotacaoParcerias",
     isPlace = page === "Locais",
     isService = page === "ServicosLocais",
     isCityPlace = page === "LocaisCidade",
@@ -2081,7 +2202,7 @@ function Editor({
           <div className="modal-header">
             <div>
               <h2>
-                {record ? "Editar" : page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" ? "Novo" : "Nova"} {PAGE_META[page].singular}
+                {record ? "Editar" : page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" || page === "LotacaoParcerias" ? "Novo" : "Nova"} {PAGE_META[page].singular}
               </h2>
               <p>
                 {record
@@ -2165,6 +2286,105 @@ function Editor({
                     placeholder="contato@empresa.com"
                   />
                 </Field>
+              </>
+            )}
+            {isLotacao && (
+              <>
+                <Field label="Nome do motorista">
+                  <Input
+                    name="nome"
+                    defaultValue={record?.nome || ""}
+                    required
+                    placeholder="Nome completo"
+                  />
+                </Field>
+                <Field label="Tipo de veículo">
+                  <select name="tipo_veiculo" defaultValue={record?.tipo_veiculo || ""}>
+                    <option value="" disabled>
+                      Selecione
+                    </option>
+                    <option value="Carro">Carro (Uber/99)</option>
+                    <option value="Moto-táxi">Moto-táxi</option>
+                  </select>
+                </Field>
+                <Field label="Placa do veículo">
+                  <Input
+                    name="placa"
+                    defaultValue={record?.placa || ""}
+                    placeholder="ABC-1D23"
+                  />
+                </Field>
+                <Field label="Telefone/WhatsApp">
+                  <Input
+                    name="telefone"
+                    defaultValue={record?.telefone || ""}
+                    placeholder="(00) 00000-0000"
+                  />
+                </Field>
+                <CityField defaultValue={record?.cidade} />
+                <Field label="Dica (opcional)" full>
+                  <textarea
+                    name="dica"
+                    defaultValue={record?.dica || ""}
+                    placeholder="Alguma informação extra pro turista? (opcional)"
+                  />
+                </Field>
+                <Field full label="">
+                  <span className="check-line">
+                    <input
+                      name="disponivel"
+                      type="checkbox"
+                      defaultChecked={record?.disponivel ?? true}
+                    />{" "}
+                    Disponível agora
+                  </span>
+                </Field>
+                <Field full label="">
+                  <span className="check-line">
+                    <input
+                      name="ativo"
+                      type="checkbox"
+                      defaultChecked={record?.ativo ?? true}
+                    />{" "}
+                    Cadastro ativo e visível no Guia
+                  </span>
+                </Field>
+                <div className="photos-section full">
+                  <h3>Foto do motorista</h3>
+                  <p className="photos-hint">
+                    Foto que o agente manda pro turista junto com o status de disponibilidade.
+                  </p>
+                  <div className="photo-cover-row">
+                    {previewUrl ? (
+                      <PhotoPreview
+                        src={previewUrl}
+                        alt="Foto do motorista"
+                        cover
+                        removable={!!coverFile}
+                        onOpen={() => setExpandedImage(previewUrl)}
+                        onRemove={() => {
+                          setCoverFile(null);
+                          setPreviewUrl(record?.foto_capa_url || "");
+                        }}
+                      />
+                    ) : (
+                      <div className="photo-cover-empty">Sem foto ainda</div>
+                    )}
+                  </div>
+                  <div className="photo-pickers">
+                    <PhotoPicker
+                      label={previewUrl ? "Trocar foto" : "Nova foto"}
+                      hint="Foto do motorista"
+                      files={coverFile ? [coverFile] : []}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setCoverFile(file);
+                        if (file) setPreviewUrl(URL.createObjectURL(file));
+                        event.target.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
               </>
             )}
             {isPlace && (
@@ -3287,7 +3507,7 @@ function Editor({
                 </div>
               </>
             )}
-            {!isCompany && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && !isAssinatura && !isServicoGeral && (
+            {!isCompany && !isLotacao && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && !isAssinatura && !isServicoGeral && (
               <>
                 <Field label="Nome">
                   <Input
