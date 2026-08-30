@@ -402,6 +402,9 @@ export default function App() {
         item.cidade,
         item.telefone,
         item.categoria?.nome,
+        typeof item.categoria === "string" ? item.categoria : null,
+        (item.tags || []).join(" "),
+        item.fonte,
         item.tipo_servico,
         item.tipo_local,
         item.tipo_veiculo,
@@ -603,11 +606,14 @@ export default function App() {
       const slug = await gerarSlugUnico(values.nome, "historias_cidade", editingRecord?.id);
       payload = {
         nome: values.nome,
+        categoria: values.categoria || null,
+        tags: values.tags
+          ? values.tags.split(",").map((t) => t.trim()).filter(Boolean)
+          : null,
         historia: values.historia || null,
+        fonte: values.fonte || null,
         endereco: values.endereco || null,
         cidade: values.cidade || null,
-        latitude: Number(values.latitude),
-        longitude: Number(values.longitude),
         horario_funcionamento: values.horario_funcionamento || null,
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
@@ -1677,7 +1683,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
         <table>
           <thead>
             <tr>
-              {["Nome", "Endereço", "Coordenadas", "Status", ""].map((x) => (
+              {["Nome", "Categoria", "Cidade", "Tags", "Status", ""].map((x) => (
                 <th key={x}>{x}</th>
               ))}
             </tr>
@@ -1689,9 +1695,12 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
                   <b>{x.nome}</b>
                   {x.foto_capa_url && <small>com foto</small>}
                 </td>
-                <td>{x.endereco || "—"}</td>
                 <td>
-                  <small>{x.latitude?.toFixed(5)}, {x.longitude?.toFixed(5)}</small>
+                  {x.categoria ? <span className="pill">{x.categoria.replaceAll("_", " ")}</span> : "—"}
+                </td>
+                <td>{x.cidade || "—"}</td>
+                <td>
+                  <small>{(x.tags || []).join(", ") || "—"}</small>
                 </td>
                 <td>
                   <Status value={x.ativo ? "ativo" : "inativo"} />
@@ -3180,60 +3189,66 @@ function Editor({
                     placeholder="Ex.: Marco do Descobrimento"
                   />
                 </Field>
+                <Field label="Categoria">
+                  <select name="categoria" defaultValue={record?.categoria || ""}>
+                    <option value="">Sem categoria</option>
+                    <option value="marco_historico">Marco histórico</option>
+                    <option value="igreja">Igreja/capela</option>
+                    <option value="museu">Museu</option>
+                    <option value="casa_camara_cadeia">Casa de Câmara e Cadeia</option>
+                    <option value="praca">Praça</option>
+                    <option value="mirante">Mirante</option>
+                    <option value="farol">Farol</option>
+                    <option value="fortificacao">Fortificação/forte</option>
+                    <option value="memorial">Memorial/museu temático</option>
+                    <option value="aldeia_indigena">Aldeia indígena</option>
+                    <option value="fonte_agua">Fonte d'água</option>
+                    <option value="praia_historica">Praia com valor histórico</option>
+                    <option value="travessia">Travessia/balsa</option>
+                    <option value="origem_nome">Origem do nome</option>
+                    <option value="tradicao_popular">Tradição popular</option>
+                    <option value="centro_historico">Centro histórico (conjunto)</option>
+                  </select>
+                </Field>
                 <Field label="Endereço/referência">
                   <Input
                     name="endereco"
                     defaultValue={record?.endereco || ""}
-                    placeholder="Rua, esquina, ponto de referência"
+                    placeholder="Ex.: Cidade Alta, Praça dos Pataxós (referência textual, sem precisar de coordenada exata)"
                   />
                 </Field>
                 <CityField defaultValue={record?.cidade} required />
+                <Field label="Tags (separadas por vírgula)" full>
+                  <Input
+                    name="tags"
+                    defaultValue={(record?.tags || []).join(", ")}
+                    placeholder="Ex.: descobrimento, cabral, 1500, IPHAN, tombado"
+                  />
+                </Field>
                 <Field label="História" full>
                   <textarea
                     name="historia"
                     defaultValue={record?.historia || ""}
-                    placeholder="A história completa desse ponto — o que aconteceu aqui, curiosidades, contexto"
+                    placeholder="A história completa desse ponto — o que aconteceu aqui, curiosidades, contexto, período histórico"
+                  />
+                </Field>
+                <Field label="Fonte (opcional)" full>
+                  <Input
+                    name="fonte"
+                    defaultValue={record?.fonte || ""}
+                    placeholder="De onde veio essa informação (site, IPHAN, Wikipédia...)"
                   />
                 </Field>
                 <ScheduleEditor
                   value={record?.horario_funcionamento || ""}
                   onChange={setScheduleValue}
                 />
-                <Field label="Link Google Maps" full>
+                <Field label="Link Google Maps (opcional)" full>
                   <Input
                     name="link_google_maps"
                     type="url"
-                    onChange={handleInputChange}
-                    onBlur={handleMapsLinkBlur}
                     defaultValue={record?.link_google_maps || ""}
-                    placeholder="https://maps.google.com/?q=... (aceita link curto maps.app.goo.gl)"
-                  />
-                  {coordStatus && <small className="coord-status">{coordStatus}</small>}
-                </Field>
-                <Field label="Latitude (obrigatório)">
-                  <Input
-                    name="latitude"
-                    type="number"
-                    step="any"
-                    required
-                    defaultValue={
-                      record?.latitude ??
-                      extractLatLng(record?.link_google_maps || "").lat
-                    }
-                    placeholder="-16.44"
-                  />
-                </Field>
-                <Field label="Longitude (obrigatório)">
-                  <Input
-                    name="longitude"
-                    type="number"
-                    step="any"
-                    required
-                    defaultValue={
-                      record?.longitude ??
-                      extractLatLng(record?.link_google_maps || "").lng
-                    }
-                    placeholder="-39.07"
+                    placeholder="https://maps.google.com/?q=... (opcional — não precisa mais de coordenada exata)"
                   />
                 </Field>
                 <Field label="Link curto (gerado automaticamente pelo nome)" full>
