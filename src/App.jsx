@@ -535,7 +535,10 @@ export default function App() {
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
-        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        // So gera o link curto se tiver um link_google_maps de verdade por tras — um
+        // link curto sem destino real dava 404 no redirecionador (bug real, achado
+        // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
         ativo: values.ativo === "on",
       };
     } else if (page === "ServicosLocais") {
@@ -558,7 +561,10 @@ export default function App() {
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
-        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        // So gera o link curto se tiver um link_google_maps de verdade por tras — um
+        // link curto sem destino real dava 404 no redirecionador (bug real, achado
+        // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
         ativo: values.ativo === "on",
       };
     } else if (page === "LocaisCidade") {
@@ -577,7 +583,10 @@ export default function App() {
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
-        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        // So gera o link curto se tiver um link_google_maps de verdade por tras — um
+        // link curto sem destino real dava 404 no redirecionador (bug real, achado
+        // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
         ativo: values.ativo === "on",
       };
     } else if (page === "EmpresasTurismo") {
@@ -597,7 +606,10 @@ export default function App() {
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
-        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        // So gera o link curto se tiver um link_google_maps de verdade por tras — um
+        // link curto sem destino real dava 404 no redirecionador (bug real, achado
+        // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
         ativo: values.ativo === "on",
         atualizado_em: new Date().toISOString(),
       };
@@ -618,7 +630,10 @@ export default function App() {
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
-        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        // So gera o link curto se tiver um link_google_maps de verdade por tras — um
+        // link curto sem destino real dava 404 no redirecionador (bug real, achado
+        // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
         ativo: values.ativo === "on",
         atualizado_em: new Date().toISOString(),
       };
@@ -648,7 +663,10 @@ export default function App() {
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
-        link_google_maps_curto: `https://guiaporto.com.br/${slug}`,
+        // So gera o link curto se tiver um link_google_maps de verdade por tras — um
+        // link curto sem destino real dava 404 no redirecionador (bug real, achado
+        // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
         ativo: values.ativo === "on",
         atualizado_em: new Date().toISOString(),
       };
