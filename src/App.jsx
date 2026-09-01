@@ -65,11 +65,12 @@ const PAGE_META = {
   EmpresasTurismo: { label: "Empresas Turismo", singular: "Passeio", Icon: Compass },
   HistoriasCidade: { label: "Histórias da Cidade", singular: "História", Icon: Landmark },
   ServicosGerais: { label: "Serviços Gerais", singular: "Serviço geral", Icon: Stethoscope },
+  Shows: { label: "Shows", singular: "Show", Icon: Music },
   Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
   Assinantes: { label: "Assinantes", singular: "Assinatura", Icon: CreditCard },
 };
-const nav = ["Empresas", "LotacaoParcerias", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Categorias", "Assinantes"];
-const emptyData = { categorias: [], empresas: [], lotacaoParcerias: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [], servicosGerais: [] };
+const nav = ["Empresas", "LotacaoParcerias", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Shows", "Categorias", "Assinantes"];
+const emptyData = { categorias: [], empresas: [], lotacaoParcerias: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [], servicosGerais: [], shows: [] };
 
 function gerarSlug(nome) {
   return nome
@@ -84,7 +85,7 @@ function gerarSlug(nome) {
 // As 6 tabelas que geram link curto guiaporto.com.br/<slug> \u2014 TODAS dividem o MESMO
 // namespace de URL (o redirecionador consulta as 6, ver /opt/guiaporto-redirect na
 // VPS), entao um slug tem que ser unico entre elas, nao so dentro da propria tabela.
-const TABELAS_COM_SLUG = ["locais", "servicos_locais", "locais_cidade", "passeios", "historias_cidade", "servicos_gerais"];
+const TABELAS_COM_SLUG = ["locais", "servicos_locais", "locais_cidade", "passeios", "historias_cidade", "servicos_gerais", "shows"];
 
 // Gera um slug garantidamente unico em TODAS as tabelas acima \u2014 achamos 2 colisoes
 // reais em producao 27/08 (dois negocios diferentes gerando o mesmo slug e brigando
@@ -289,6 +290,10 @@ export default function App() {
           .from("servicos_gerais")
           .select("*")
           .order("nome", { ascending: true }),
+        supabase
+          .from("shows")
+          .select("*")
+          .order("data", { ascending: true }),
       ]),
     [],
   );
@@ -296,8 +301,8 @@ export default function App() {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    let [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais] = await fetchTudo();
-    let error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error;
+    let [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais, shows] = await fetchTudo();
+    let error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error || shows.error;
     // O token de sessao pode estar momentaneamente expirado logo apos o login ou
     // depois da aba ficar em segundo plano — isso aparece como erro de JWT na
     // primeira carga. Em vez de mostrar erro pro usuario, forca um refresh da
@@ -305,8 +310,8 @@ export default function App() {
     if (error && /jwt|token/i.test(error.message || "")) {
       const { error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError) {
-        [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais] = await fetchTudo();
-        error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error;
+        [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais, shows] = await fetchTudo();
+        error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error || shows.error;
       }
     }
     if (error)
@@ -331,6 +336,7 @@ export default function App() {
         turistas: turistas.data || [],
         planos: planos.data || [],
         servicosGerais: servicosGerais.data || [],
+        shows: shows.data || [],
       });
     setLoading(false);
   }, [fetchTudo]);
@@ -371,7 +377,9 @@ export default function App() {
                     ? data.assinaturas
                     : page === "ServicosGerais"
                       ? data.servicosGerais
-                      : data.categorias;
+                      : page === "Shows"
+                        ? data.shows
+                        : data.categorias;
     const normalizedSearch = semAcento(search.trim());
     return list.filter((item) => {
       // ServicosLocais/LocaisCidade/EmpresasTurismo/HistoriasCidade/Assinantes/ServicosGerais
@@ -386,6 +394,7 @@ export default function App() {
         page === "HistoriasCidade" ||
         page === "Assinantes" ||
         page === "ServicosGerais" ||
+        page === "Shows" ||
         categoryFilter === "Todas" ||
         item.categoria_id === categoryFilter;
       const linkedPlace =
@@ -409,6 +418,8 @@ export default function App() {
         item.tipo_local,
         item.tipo_veiculo,
         item.placa,
+        item.artista,
+        item.local,
         item.dica,
         item.valor,
         item.status,
@@ -421,10 +432,10 @@ export default function App() {
         .filter(Boolean)
         .join(" ");
       const searchableNormalizado = semAcento(searchable);
-      // Cidade existe como coluna propria em "Locais" e em "LotacaoParcerias" — filtro
-      // de cidade (com contagem) so se aplica nessas duas paginas.
+      // Cidade existe como coluna propria em "Locais", "LotacaoParcerias" e "Shows" —
+      // filtro de cidade (com contagem) so se aplica nessas paginas.
       const cityMatches =
-        (page !== "Locais" && page !== "LotacaoParcerias") ||
+        (page !== "Locais" && page !== "LotacaoParcerias" && page !== "Shows") ||
         cityFilter === "Todas" ||
         (cityFilter === "Sem cidade" ? !item.cidade : item.cidade === cityFilter);
       // Filtro de tipo de veiculo (Carro/Moto) — so existe em "LotacaoParcerias".
@@ -439,9 +450,10 @@ export default function App() {
   // Contagem por cidade DENTRO da categoria selecionada (muda a lista de cidades e os
   // numeros quando troca de categoria) — so relevante pra "Locais".
   const cityCounts = useMemo(() => {
-    if (page === "LotacaoParcerias") {
+    if (page === "LotacaoParcerias" || page === "Shows") {
+      const fonte = page === "LotacaoParcerias" ? data.lotacaoParcerias : data.shows;
       const counts = {};
-      for (const l of data.lotacaoParcerias) {
+      for (const l of fonte) {
         const cidade = l.cidade || "Sem cidade";
         counts[cidade] = (counts[cidade] || 0) + 1;
       }
@@ -457,7 +469,7 @@ export default function App() {
       counts[cidade] = (counts[cidade] || 0) + 1;
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  }, [data.locais, data.lotacaoParcerias, page, categoryFilter]);
+  }, [data.locais, data.lotacaoParcerias, data.shows, page, categoryFilter]);
   const vehicleCounts = useMemo(() => {
     if (page !== "LotacaoParcerias") return [];
     const counts = {};
@@ -476,6 +488,7 @@ export default function App() {
     EmpresasTurismo: "Passeios oferecidos por empresas de turismo da região — valor, empresa e fotos, separado dos outros locais.",
     HistoriasCidade: "Pontos históricos com a história completa, foto e localização — cobertura curada, além da busca automática do agente.",
     ServicosGerais: "Farmácia, hospital, clínica, banco, mercado — serviços práticos que o turista procura no dia a dia.",
+    Shows: "Shows e eventos da região — avulsos ou recorrentes, com data/horário, local e valor do ingresso.",
     Categorias: "Defina como os locais são agrupados no aplicativo.",
     Assinantes: "Gerencie quem está com acesso pago ao Guia Porto — status, plano e vigência.",
   };
@@ -666,6 +679,27 @@ export default function App() {
         // So gera o link curto se tiver um link_google_maps de verdade por tras — um
         // link curto sem destino real dava 404 no redirecionador (bug real, achado
         // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
+        ativo: values.ativo === "on",
+        atualizado_em: new Date().toISOString(),
+      };
+    } else if (page === "Shows") {
+      table = "shows";
+      const slug = await gerarSlugUnico(values.nome, "shows", editingRecord?.id);
+      payload = {
+        nome: values.nome,
+        artista: values.artista || null,
+        local: values.local || null,
+        endereco: values.endereco || null,
+        cidade: values.cidade || null,
+        data: values.data || null,
+        horario_funcionamento: values.horario_funcionamento || null,
+        valor: values.valor || null,
+        descricao: values.descricao || null,
+        foto_capa_url: values.foto_capa_url || null,
+        link_ingresso: values.link_ingresso || null,
+        link_google_maps: values.link_google_maps || null,
+        slug_nome: slug,
         link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
         ativo: values.ativo === "on",
         atualizado_em: new Date().toISOString(),
@@ -1006,6 +1040,28 @@ export default function App() {
         setLoading(false);
         return showNotice(`Motorista salvo, mas não foi possível salvar a foto: ${coverUpdate.error.message}`, "error");
       }
+    } else if (page === "Shows" && values._coverFile) {
+      // So a capa (flyer do show), sem galeria — mesmo bucket "locais", pasta propria.
+      const showId = editingRecord?.id || result.data.id;
+      const coverFile = await comprimirImagem(values._coverFile);
+      const extension = coverFile.name.includes(".") ? `.${coverFile.name.split(".").pop()}` : "";
+      const path = `show-${showId}/capa-${crypto.randomUUID()}${extension}`;
+      const upload = await supabase.storage
+        .from("locais")
+        .upload(path, coverFile, { upsert: false, contentType: coverFile.type || undefined });
+      if (upload.error) {
+        setLoading(false);
+        return showNotice(`Show salvo, mas não foi possível enviar a foto: ${upload.error.message}`, "error");
+      }
+      const coverUrl = supabase.storage.from("locais").getPublicUrl(path).data.publicUrl;
+      const coverUpdate = await supabase
+        .from("shows")
+        .update({ foto_capa_url: coverUrl, atualizado_em: new Date().toISOString() })
+        .eq("id", showId);
+      if (coverUpdate.error) {
+        setLoading(false);
+        return showNotice(`Show salvo, mas não foi possível salvar a foto: ${coverUpdate.error.message}`, "error");
+      }
     }
     setLoading(false);
     setModal(false);
@@ -1047,7 +1103,9 @@ export default function App() {
                     ? "assinaturas"
                     : page === "ServicosGerais"
                       ? "servicos_gerais"
-                      : "categorias";
+                      : page === "Shows"
+                        ? "shows"
+                        : "categorias";
     const result = await supabase
       .from(table)
       .delete()
@@ -1171,7 +1229,9 @@ export default function App() {
                                   ? data.assinaturas
                                   : page === "ServicosGerais"
                                     ? data.servicosGerais
-                                    : data.locais
+                                    : page === "Shows"
+                                      ? data.shows
+                                      : data.locais
                     ).length} no total`}
               </p>
             </div>
@@ -1182,7 +1242,7 @@ export default function App() {
                 setModal(true);
               }}
             >
-              ＋ {page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" || page === "LotacaoParcerias" ? "Novo" : "Nova"} {PAGE_META[page].singular}
+              ＋ {page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" || page === "LotacaoParcerias" || page === "Shows" ? "Novo" : "Nova"} {PAGE_META[page].singular}
             </button>
           </div>
           <div className="stats">
@@ -1258,7 +1318,7 @@ export default function App() {
                   placeholder={`Buscar ${PAGE_META[page].label.toLowerCase()}...`}
                 />
               </div>
-              {page !== "Categorias" && page !== "LotacaoParcerias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && page !== "Assinantes" && page !== "ServicosGerais" && (
+              {page !== "Categorias" && page !== "LotacaoParcerias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && page !== "Assinantes" && page !== "ServicosGerais" && page !== "Shows" && (
                 <div className="category-filters">
                   <button
                     className={
@@ -1285,7 +1345,7 @@ export default function App() {
                   ))}
                 </div>
               )}
-              {(page === "Locais" || page === "LotacaoParcerias") && cityCounts.length > 0 && (
+              {(page === "Locais" || page === "LotacaoParcerias" || page === "Shows") && cityCounts.length > 0 && (
                 <div className="city-filters">
                   <button
                     className={cityFilter === "Todas" ? "category-filter active" : "category-filter"}
@@ -1831,6 +1891,78 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
         {loading ? "Carregando dados..." : "Ainda não há motoristas parceiros cadastrados."}
       </div>
     );
+  if (page === "Shows")
+    return rows.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {["Show", "Artista", "Local", "Cidade", "Quando", "Valor", "Status", ""].map((x) => (
+                <th key={x}>{x}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.id}>
+                <td>
+                  <b>{x.nome}</b>
+                  {x.foto_capa_url && <small>com foto</small>}
+                </td>
+                <td>{x.artista || "—"}</td>
+                <td>{x.local || "—"}</td>
+                <td>{x.cidade || "—"}</td>
+                <td>
+                  <small>
+                    {x.data ? new Date(x.data + "T00:00:00").toLocaleDateString("pt-BR") : ""}
+                    {x.data && x.horario_funcionamento ? " · " : ""}
+                    {x.horario_funcionamento ? "recorrente" : ""}
+                    {!x.data && !x.horario_funcionamento ? "—" : ""}
+                  </small>
+                </td>
+                <td>{x.valor || "—"}</td>
+                <td>
+                  <Status value={x.ativo ? "ativo" : "inativo"} />
+                </td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-button edit"
+                      onClick={() => onEdit(x)}
+                      title="Editar"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button delete"
+                      onClick={() => onDelete(x)}
+                      title="Excluir"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M6 6v14h12V6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty">
+        {loading ? "Carregando dados..." : "Ainda não há shows cadastrados."}
+      </div>
+    );
   if (page === "ServicosGerais")
     return rows.length ? (
       <div className="table-wrap">
@@ -2191,7 +2323,8 @@ function Editor({
     isTour = page === "EmpresasTurismo",
     isHistoria = page === "HistoriasCidade",
     isAssinatura = page === "Assinantes",
-    isServicoGeral = page === "ServicosGerais";
+    isServicoGeral = page === "ServicosGerais",
+    isShow = page === "Shows";
   const [previewUrl, setPreviewUrl] = useState(record?.foto_capa_url || "");
   const [coverFile, setCoverFile] = useState(null);
   const [extraFiles, setExtraFiles] = useState([]);
@@ -2273,7 +2406,7 @@ function Editor({
           <div className="modal-header">
             <div>
               <h2>
-                {record ? "Editar" : page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" || page === "LotacaoParcerias" ? "Novo" : "Nova"} {PAGE_META[page].singular}
+                {record ? "Editar" : page === "ServicosLocais" || page === "LocaisCidade" || page === "EmpresasTurismo" || page === "ServicosGerais" || page === "LotacaoParcerias" || page === "Shows" ? "Novo" : "Nova"} {PAGE_META[page].singular}
               </h2>
               <p>
                 {record
@@ -3584,7 +3717,142 @@ function Editor({
                 </div>
               </>
             )}
-            {!isCompany && !isLotacao && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && !isAssinatura && !isServicoGeral && (
+            {isShow && (
+              <>
+                <Field label="Nome do show/evento">
+                  <Input
+                    name="nome"
+                    defaultValue={record?.nome || ""}
+                    required
+                    placeholder="Ex.: Noite do Forró, Show Ivete Sangalo"
+                  />
+                </Field>
+                <Field label="Artista/atração (opcional)">
+                  <Input
+                    name="artista"
+                    defaultValue={record?.artista || ""}
+                    placeholder="Quem se apresenta"
+                  />
+                </Field>
+                <Field label="Local (nome do lugar)">
+                  <Input
+                    name="local"
+                    defaultValue={record?.local || ""}
+                    placeholder="Ex.: Passarela do Descobrimento, Tôa Tôa"
+                  />
+                </Field>
+                <CityField defaultValue={record?.cidade} required />
+                <Field label="Endereço (opcional)" full>
+                  <Input
+                    name="endereco"
+                    defaultValue={record?.endereco || ""}
+                    placeholder="Rua, número, bairro"
+                  />
+                </Field>
+                <Field label="Valor do ingresso">
+                  <Input
+                    name="valor"
+                    defaultValue={record?.valor || ""}
+                    placeholder="Ex.: R$ 50, Gratuito, Consumação mínima R$ 30"
+                  />
+                </Field>
+                <Field label="Data (show avulso, com dia marcado)">
+                  <Input
+                    name="data"
+                    type="date"
+                    defaultValue={record?.data || ""}
+                  />
+                </Field>
+                <Field label="Descrição" full>
+                  <textarea
+                    name="descricao"
+                    defaultValue={record?.descricao || ""}
+                    placeholder="Sobre o show — o que esperar, estilo musical, etc."
+                  />
+                </Field>
+                <Field full label="">
+                  <p className="photos-hint">
+                    Preencha <b>Data</b> pra um show avulso (com dia marcado) ou o{" "}
+                    <b>Horário</b> abaixo pra um show recorrente (ex.: toda terça-feira) —
+                    pode usar os dois se fizer sentido.
+                  </p>
+                </Field>
+                <ScheduleEditor
+                  value={record?.horario_funcionamento || ""}
+                  onChange={setScheduleValue}
+                />
+                <Field label="Link do ingresso (opcional)" full>
+                  <Input
+                    name="link_ingresso"
+                    type="url"
+                    defaultValue={record?.link_ingresso || ""}
+                    placeholder="https://..."
+                  />
+                </Field>
+                <Field label="Link Google Maps (opcional)" full>
+                  <Input
+                    name="link_google_maps"
+                    type="url"
+                    defaultValue={record?.link_google_maps || ""}
+                    placeholder="https://maps.google.com/?q=... (localização do local do show)"
+                  />
+                </Field>
+                <Field label="Link curto (gerado automaticamente pelo nome)" full>
+                  <Input
+                    value={record?.link_google_maps_curto || "gerado ao salvar, se tiver Link Google Maps"}
+                    readOnly
+                    disabled
+                  />
+                </Field>
+                <Field full label="">
+                  <span className="check-line">
+                    <input
+                      name="ativo"
+                      type="checkbox"
+                      defaultChecked={record?.ativo ?? true}
+                    />{" "}
+                    Show ativo e visível no Guia
+                  </span>
+                </Field>
+                <div className="photos-section full">
+                  <h3>Foto de capa</h3>
+                  <p className="photos-hint">
+                    O flyer/cartaz do show, ou uma foto do local.
+                  </p>
+                  <div className="photo-cover-row">
+                    {previewUrl ? (
+                      <PhotoPreview
+                        src={previewUrl}
+                        alt="Foto de capa"
+                        cover
+                        removable={!!coverFile}
+                        onOpen={() => setExpandedImage(previewUrl)}
+                        onRemove={() => {
+                          setCoverFile(null);
+                          setPreviewUrl(record?.foto_capa_url || "");
+                        }}
+                      />
+                    ) : (
+                      <div className="photo-cover-empty">Sem foto de capa ainda</div>
+                    )}
+                  </div>
+                  <div className="photo-pickers">
+                    <PhotoPicker
+                      label={previewUrl ? "Trocar capa" : "Nova capa"}
+                      hint="Flyer ou foto do show"
+                      files={coverFile ? [coverFile] : []}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setCoverFile(file);
+                        if (file) setPreviewUrl(URL.createObjectURL(file));
+                        event.target.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+            {!isCompany && !isLotacao && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && !isAssinatura && !isServicoGeral && !isShow && (
               <>
                 <Field label="Nome">
                   <Input
