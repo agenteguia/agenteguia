@@ -547,6 +547,7 @@ export default function App() {
         horario_funcionamento: values.horario_funcionamento || null,
         foto_capa_url: values.foto_capa_url || null,
         link_google_maps: values.link_google_maps || null,
+        tags: values.tags || null,
         slug_nome: slug,
         // So gera o link curto se tiver um link_google_maps de verdade por tras — um
         // link curto sem destino real dava 404 no redirecionador (bug real, achado
@@ -2655,6 +2656,17 @@ function Editor({
                     defaultValue={record?.descricao || ""}
                     placeholder="O que é este lugar?"
                   />
+                </Field>
+                <Field label="Tags de busca" full>
+                  <Input
+                    name="tags"
+                    defaultValue={record?.tags || ""}
+                    placeholder="Ex: chinês, comida oriental, wok, delivery (separe por vírgula)"
+                  />
+                  <small style={{ color: "#888" }}>
+                    Ajuda o agente a achar este local em buscas específicas (tipo de
+                    culinária, características). Não substitui a descrição, só reforça.
+                  </small>
                 </Field>
                 <Field label="História e curiosidades" full>
                   <textarea
