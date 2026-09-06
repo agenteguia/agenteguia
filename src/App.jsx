@@ -4,7 +4,7 @@ import {
   Waves, Umbrella, UtensilsCrossed, Coffee, BedDouble, Hotel, Martini, Wine, Beer,
   TreePine, Leaf, Mountain, Wrench, ConciergeBell, ShoppingBag, Camera, Music,
   Ship, Anchor, Car, Bike, Sun, Fish, PartyPopper, Store, Backpack, Tent, HelpCircle,
-  Stethoscope,
+  Stethoscope, KeyRound,
 } from "lucide-react";
 
 // Registro de icones pra categoria — trocado de emoji livre (dificil de manter consistente
@@ -41,6 +41,12 @@ import { supabase } from "./supabase.js";
 // Vitor: organiza melhor a indicacao). AINDA NAO entra no prompt do agente/recomendacao —
 // isso fica pro "sistema algoritmico" combinado que vai indicar TODAS essas tabelas juntas,
 // depois que todos os menus novos estiverem prontos.
+// Locadoras (06/09): empresas de aluguel de carro/moto/van/buggy — antes viviam DENTRO
+// de "Locais" (categoria "Locadoras"), migradas pra tabela propria a pedido do Sr.
+// Vitor: o agente confundia "quero alugar um carro" com "preciso de um motorista/
+// lotacao" (LotacaoParcerias, tabela diferente, motorista PESSOA vs empresa de aluguel)
+// quando as duas coisas ficavam misturadas no mesmo catalogo. Mesmo padrao simples de
+// ServicosGerais (so capa, sem galeria) + campo de Tags de busca (igual Locais).
 // ServicosGerais (23/08): farmacia, hospital, clinica, banco, mercado — o Sr. Vitor pediu
 // EXPLICITAMENTE que isso fosse um MENU proprio (tabela dedicada), nao uma categoria dentro
 // de Empresas (era assim antes, categoria "Servicos Gerais" foi migrada e apagada). Mesmo
@@ -60,6 +66,7 @@ const PAGE_META = {
   Empresas: { label: "Empresas parceiras", singular: "Empresa parceira", Icon: Building2 },
   LotacaoParcerias: { label: "Lotação Parcerias", singular: "Motorista parceiro", Icon: Car },
   Locais: { label: "Empresas", singular: "Empresa", Icon: ListChecks },
+  Locadoras: { label: "Locadoras", singular: "Locadora", Icon: KeyRound },
   ServicosLocais: { label: "Serviços Locais", singular: "Serviço local", Icon: Bus },
   LocaisCidade: { label: "Locais da Cidade", singular: "Local da cidade", Icon: MapPin },
   EmpresasTurismo: { label: "Empresas Turismo", singular: "Passeio", Icon: Compass },
@@ -69,8 +76,8 @@ const PAGE_META = {
   Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
   Assinantes: { label: "Assinantes", singular: "Assinatura", Icon: CreditCard },
 };
-const nav = ["Empresas", "LotacaoParcerias", "Locais", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Shows", "Categorias", "Assinantes"];
-const emptyData = { categorias: [], empresas: [], lotacaoParcerias: [], locais: [], fotos: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [], servicosGerais: [], shows: [] };
+const nav = ["Empresas", "LotacaoParcerias", "Locais", "Locadoras", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Shows", "Categorias", "Assinantes"];
+const emptyData = { categorias: [], empresas: [], lotacaoParcerias: [], locais: [], fotos: [], locadoras: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [], servicosGerais: [], shows: [] };
 
 function gerarSlug(nome) {
   return nome
@@ -85,7 +92,7 @@ function gerarSlug(nome) {
 // As 6 tabelas que geram link curto guiaporto.com.br/<slug> \u2014 TODAS dividem o MESMO
 // namespace de URL (o redirecionador consulta as 6, ver /opt/guiaporto-redirect na
 // VPS), entao um slug tem que ser unico entre elas, nao so dentro da propria tabela.
-const TABELAS_COM_SLUG = ["locais", "servicos_locais", "locais_cidade", "passeios", "historias_cidade", "servicos_gerais", "shows"];
+const TABELAS_COM_SLUG = ["locais", "locadoras", "servicos_locais", "locais_cidade", "passeios", "historias_cidade", "servicos_gerais", "shows"];
 
 // Gera um slug garantidamente unico em TODAS as tabelas acima \u2014 achamos 2 colisoes
 // reais em producao 27/08 (dois negocios diferentes gerando o mesmo slug e brigando
@@ -251,6 +258,10 @@ export default function App() {
           .select("*")
           .order("ordem", { ascending: true }),
         supabase
+          .from("locadoras")
+          .select("*")
+          .order("nome", { ascending: true }),
+        supabase
           .from("servicos_locais")
           .select("*")
           .order("nome", { ascending: true }),
@@ -301,8 +312,8 @@ export default function App() {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    let [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais, shows] = await fetchTudo();
-    let error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error || shows.error;
+    let [categorias, empresas, lotacaoParcerias, locais, fotos, locadoras, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais, shows] = await fetchTudo();
+    let error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || locadoras.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error || shows.error;
     // O token de sessao pode estar momentaneamente expirado logo apos o login ou
     // depois da aba ficar em segundo plano — isso aparece como erro de JWT na
     // primeira carga. Em vez de mostrar erro pro usuario, forca um refresh da
@@ -310,8 +321,8 @@ export default function App() {
     if (error && /jwt|token/i.test(error.message || "")) {
       const { error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError) {
-        [categorias, empresas, lotacaoParcerias, locais, fotos, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais, shows] = await fetchTudo();
-        error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error || shows.error;
+        [categorias, empresas, lotacaoParcerias, locais, fotos, locadoras, servicos, locaisCidade, passeios, fotosPasseios, historias, fotosHistorias, assinaturas, turistas, planos, servicosGerais, shows] = await fetchTudo();
+        error = categorias.error || empresas.error || lotacaoParcerias.error || locais.error || fotos.error || locadoras.error || servicos.error || locaisCidade.error || passeios.error || fotosPasseios.error || historias.error || fotosHistorias.error || assinaturas.error || turistas.error || planos.error || servicosGerais.error || shows.error;
       }
     }
     if (error)
@@ -326,6 +337,7 @@ export default function App() {
         lotacaoParcerias: lotacaoParcerias.data || [],
         locais: locais.data || [],
         fotos: fotos.data || [],
+        locadoras: locadoras.data || [],
         servicos: servicos.data || [],
         locaisCidade: locaisCidade.data || [],
         passeios: passeios.data || [],
@@ -365,6 +377,8 @@ export default function App() {
           ? data.lotacaoParcerias
           : page === "Locais"
             ? data.locais
+          : page === "Locadoras"
+            ? data.locadoras
           : page === "ServicosLocais"
             ? data.servicos
             : page === "LocaisCidade"
@@ -388,6 +402,7 @@ export default function App() {
       const categoryMatches =
         page === "Categorias" ||
         page === "LotacaoParcerias" ||
+        page === "Locadoras" ||
         page === "ServicosLocais" ||
         page === "LocaisCidade" ||
         page === "EmpresasTurismo" ||
@@ -412,7 +427,7 @@ export default function App() {
         item.telefone,
         item.categoria?.nome,
         typeof item.categoria === "string" ? item.categoria : null,
-        (item.tags || []).join(" "),
+        Array.isArray(item.tags) ? item.tags.join(" ") : item.tags || "",
         item.fonte,
         item.tipo_servico,
         item.tipo_local,
@@ -483,6 +498,7 @@ export default function App() {
     Empresas: "Gerencie os parceiros e negócios da plataforma.",
     LotacaoParcerias: "Motoristas parceiros de lotação (Uber, 99, moto-táxi) que o turista pode chamar direto pelo WhatsApp.",
     Locais: "Organize os lugares que o Guia Porto recomenda.",
+    Locadoras: "Empresas de aluguel de carro, moto, van e buggy — separado de Empresas pra não confundir com motorista particular (Lotação Parcerias).",
     ServicosLocais: "Balsa, lotação, van e outros serviços da região — dado que o agente não consegue confirmar por API, curamos aqui.",
     LocaisCidade: "Pontos de referência que não aparecem no Google Maps nem no OSM — ponto de ônibus, lotação, van, pontos pouco conhecidos.",
     EmpresasTurismo: "Passeios oferecidos por empresas de turismo da região — valor, empresa e fotos, separado dos outros locais.",
@@ -660,6 +676,31 @@ export default function App() {
         inicio_em: values.inicio_em ? new Date(values.inicio_em).toISOString() : null,
         fim_em: values.fim_em ? new Date(values.fim_em).toISOString() : null,
         renovar_lembrete: values.renovar_lembrete === "on",
+      };
+    } else if (page === "Locadoras") {
+      table = "locadoras";
+      const slug = await gerarSlugUnico(values.nome, "locadoras", editingRecord?.id);
+      payload = {
+        nome: values.nome,
+        tipo_veiculo: values.tipo_veiculo || null,
+        descricao: values.descricao || null,
+        endereco: values.endereco || null,
+        cidade: values.cidade || null,
+        latitude: values.latitude ? Number(values.latitude) : null,
+        longitude: values.longitude ? Number(values.longitude) : null,
+        telefone: values.telefone || null,
+        instagram: values.instagram || null,
+        horario_funcionamento: values.horario_funcionamento || null,
+        foto_capa_url: values.foto_capa_url || null,
+        link_google_maps: values.link_google_maps || null,
+        tags: values.tags || null,
+        slug_nome: slug,
+        // So gera o link curto se tiver um link_google_maps de verdade por tras — um
+        // link curto sem destino real dava 404 no redirecionador (bug real, achado
+        // 30/08 quando populamos Historias da Cidade sem link do Maps ainda).
+        link_google_maps_curto: values.link_google_maps ? `https://guiaporto.com.br/${slug}` : null,
+        ativo: values.ativo === "on",
+        atualizado_em: new Date().toISOString(),
       };
     } else if (page === "ServicosGerais") {
       table = "servicos_gerais";
@@ -997,6 +1038,28 @@ export default function App() {
           "error",
         );
       }
+    } else if (page === "Locadoras" && values._coverFile) {
+      // So capa (sem galeria) — mesmo bucket "locais", pasta propria.
+      const locadoraId = editingRecord?.id || result.data.id;
+      const coverFile = await comprimirImagem(values._coverFile);
+      const extension = coverFile.name.includes(".") ? `.${coverFile.name.split(".").pop()}` : "";
+      const path = `locadora-${locadoraId}/capa-${crypto.randomUUID()}${extension}`;
+      const upload = await supabase.storage
+        .from("locais")
+        .upload(path, coverFile, { upsert: false, contentType: coverFile.type || undefined });
+      if (upload.error) {
+        setLoading(false);
+        return showNotice(`Locadora salva, mas não foi possível enviar a foto: ${upload.error.message}`, "error");
+      }
+      const coverUrl = supabase.storage.from("locais").getPublicUrl(path).data.publicUrl;
+      const coverUpdate = await supabase
+        .from("locadoras")
+        .update({ foto_capa_url: coverUrl, atualizado_em: new Date().toISOString() })
+        .eq("id", locadoraId);
+      if (coverUpdate.error) {
+        setLoading(false);
+        return showNotice(`Locadora salva, mas não foi possível salvar a foto: ${coverUpdate.error.message}`, "error");
+      }
     } else if (page === "ServicosGerais" && values._coverFile) {
       // So capa (sem galeria) — mesmo bucket "locais", pasta propria.
       const servicoGeralId = editingRecord?.id || result.data.id;
@@ -1092,6 +1155,8 @@ export default function App() {
           ? "lotacao_parcerias"
           : page === "Locais"
           ? "locais"
+          : page === "Locadoras"
+            ? "locadoras"
           : page === "ServicosLocais"
             ? "servicos_locais"
             : page === "LocaisCidade"
@@ -1140,6 +1205,7 @@ export default function App() {
   const trialAssinaturas = data.assinaturas.filter((x) => x.status === "trial").length;
   const pendentesAssinaturas = data.assinaturas.filter((x) => x.status === "pendente").length;
   const activeServicosGerais = data.servicosGerais.filter((x) => x.ativo).length;
+  const activeLocadoras = data.locadoras.filter((x) => x.ativo).length;
   return (
     <div className="app-shell">
       <aside className={menuOpen ? "sidebar open" : "sidebar"}>
@@ -1218,6 +1284,8 @@ export default function App() {
                         ? data.empresas
                         : page === "LotacaoParcerias"
                           ? data.lotacaoParcerias
+                          : page === "Locadoras"
+                          ? data.locadoras
                           : page === "ServicosLocais"
                           ? data.servicos
                           : page === "LocaisCidade"
@@ -1262,6 +1330,12 @@ export default function App() {
                 <Stat value={data.locais.length} label="Empresas cadastradas" />
                 <Stat value={activePlaces} label="Empresas ativas" />
                 <Stat value={publicPlaces} label="Pontos públicos" />
+              </>
+            )}
+            {page === "Locadoras" && (
+              <>
+                <Stat value={data.locadoras.length} label="Locadoras cadastradas" />
+                <Stat value={activeLocadoras} label="Locadoras ativas" />
               </>
             )}
             {page === "ServicosLocais" && (
@@ -1319,7 +1393,7 @@ export default function App() {
                   placeholder={`Buscar ${PAGE_META[page].label.toLowerCase()}...`}
                 />
               </div>
-              {page !== "Categorias" && page !== "LotacaoParcerias" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && page !== "Assinantes" && page !== "ServicosGerais" && page !== "Shows" && (
+              {page !== "Categorias" && page !== "LotacaoParcerias" && page !== "Locadoras" && page !== "ServicosLocais" && page !== "LocaisCidade" && page !== "EmpresasTurismo" && page !== "HistoriasCidade" && page !== "Assinantes" && page !== "ServicosGerais" && page !== "Shows" && (
                 <div className="category-filters">
                   <button
                     className={
@@ -1964,6 +2038,71 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
         {loading ? "Carregando dados..." : "Ainda não há shows cadastrados."}
       </div>
     );
+  if (page === "Locadoras")
+    return rows.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {["Locadora", "Tipo de veículo", "Cidade", "Telefone", "Status", ""].map((x) => (
+                <th key={x}>{x}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.id}>
+                <td>
+                  <b>{x.nome}</b>
+                  {x.foto_capa_url && <small>com foto</small>}
+                </td>
+                <td>
+                  <span className="pill">{x.tipo_veiculo || "—"}</span>
+                </td>
+                <td>{x.cidade || "—"}</td>
+                <td>{x.telefone || "—"}</td>
+                <td>
+                  <Status value={x.ativo ? "ativo" : "inativo"} />
+                </td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-button edit"
+                      onClick={() => onEdit(x)}
+                      title="Editar"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button delete"
+                      onClick={() => onDelete(x)}
+                      title="Excluir"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M6 6v14h12V6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty">
+        {loading ? "Carregando dados..." : "Ainda não há locadoras cadastradas."}
+      </div>
+    );
   if (page === "ServicosGerais")
     return rows.length ? (
       <div className="table-wrap">
@@ -2319,6 +2458,7 @@ function Editor({
   const isCompany = page === "Empresas",
     isLotacao = page === "LotacaoParcerias",
     isPlace = page === "Locais",
+    isLocadora = page === "Locadoras",
     isService = page === "ServicosLocais",
     isCityPlace = page === "LocaisCidade",
     isTour = page === "EmpresasTurismo",
@@ -3585,6 +3725,163 @@ function Editor({
                 </Field>
               </>
             )}
+            {isLocadora && (
+              <>
+                <Field label="Nome da locadora">
+                  <Input
+                    name="nome"
+                    defaultValue={record?.nome || ""}
+                    required
+                    placeholder="Ex.: Localiza, Porto Rent, Aluguel de Buggy Fulano"
+                  />
+                </Field>
+                <Field label="Tipo de veículo">
+                  <Input
+                    name="tipo_veiculo"
+                    defaultValue={record?.tipo_veiculo || ""}
+                    placeholder="Ex.: Carro, Moto, Van, Buggy"
+                    list="tipos-veiculo-sugeridos"
+                  />
+                  <datalist id="tipos-veiculo-sugeridos">
+                    <option value="Carro" />
+                    <option value="Moto" />
+                    <option value="Van" />
+                    <option value="Buggy" />
+                  </datalist>
+                </Field>
+                <CityField defaultValue={record?.cidade} required />
+                <Field label="Descrição" full>
+                  <textarea
+                    name="descricao"
+                    defaultValue={record?.descricao || ""}
+                    placeholder="O que essa locadora oferece?"
+                  />
+                </Field>
+                <Field label="Tags de busca" full>
+                  <Input
+                    name="tags"
+                    defaultValue={record?.tags || ""}
+                    placeholder="Ex: buggy, moto, van, 4x4 (separe por vírgula)"
+                  />
+                  <small style={{ color: "#888" }}>
+                    Ajuda o agente a achar essa locadora em buscas específicas (tipo de
+                    veículo, características). Não substitui a descrição, só reforça.
+                  </small>
+                </Field>
+                <Field label="Endereço" full>
+                  <Input
+                    name="endereco"
+                    defaultValue={record?.endereco || ""}
+                    placeholder="Rua, número, bairro"
+                  />
+                </Field>
+                <Field label="Telefone">
+                  <Input
+                    name="telefone"
+                    defaultValue={record?.telefone || ""}
+                    placeholder="(00) 00000-0000"
+                  />
+                </Field>
+                <Field label="Instagram">
+                  <Input
+                    name="instagram"
+                    defaultValue={record?.instagram || ""}
+                    placeholder="@perfil"
+                  />
+                </Field>
+                <ScheduleEditor
+                  value={record?.horario_funcionamento || ""}
+                  onChange={setScheduleValue}
+                />
+                <Field label="Link Google Maps" full>
+                  <Input
+                    name="link_google_maps"
+                    type="url"
+                    onChange={handleInputChange}
+                    onBlur={handleMapsLinkBlur}
+                    defaultValue={record?.link_google_maps || ""}
+                    placeholder="https://maps.google.com/?q=... (aceita link curto maps.app.goo.gl)"
+                  />
+                  {coordStatus && <small className="coord-status">{coordStatus}</small>}
+                </Field>
+                <Field label="Link curto (gerado automaticamente pelo nome)" full>
+                  <Input
+                    value={record?.link_google_maps_curto || "gerado ao salvar, a partir do nome da locadora"}
+                    readOnly
+                    disabled
+                  />
+                </Field>
+                <Field label="Latitude">
+                  <Input
+                    name="latitude"
+                    type="number"
+                    step="any"
+                    defaultValue={
+                      record?.latitude ??
+                      extractLatLng(record?.link_google_maps || "").lat
+                    }
+                    placeholder="-16.44"
+                  />
+                </Field>
+                <Field label="Longitude">
+                  <Input
+                    name="longitude"
+                    type="number"
+                    step="any"
+                    defaultValue={
+                      record?.longitude ??
+                      extractLatLng(record?.link_google_maps || "").lng
+                    }
+                    placeholder="-39.07"
+                  />
+                </Field>
+                <Field full label="">
+                  <span className="check-line">
+                    <input
+                      name="ativo"
+                      type="checkbox"
+                      defaultChecked={record?.ativo ?? true}
+                    />{" "}
+                    Locadora ativa e visível no Guia
+                  </span>
+                </Field>
+                <div className="photos-section full">
+                  <h3>Foto de capa</h3>
+                  <p className="photos-hint">
+                    Foto que o agente manda quando recomenda essa locadora.
+                  </p>
+                  <div className="photo-cover-row">
+                    {previewUrl ? (
+                      <PhotoPreview
+                        src={previewUrl}
+                        alt="Foto de capa"
+                        cover
+                        removable={!!coverFile}
+                        onOpen={() => setExpandedImage(previewUrl)}
+                        onRemove={() => {
+                          setCoverFile(null);
+                          setPreviewUrl(record?.foto_capa_url || "");
+                        }}
+                      />
+                    ) : (
+                      <div className="photo-cover-empty">Sem foto de capa ainda</div>
+                    )}
+                  </div>
+                  <div className="photo-pickers">
+                    <PhotoPicker
+                      label={previewUrl ? "Trocar capa" : "Nova capa"}
+                      hint="Foto principal da locadora"
+                      files={coverFile ? [coverFile] : []}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setCoverFile(file);
+                        if (file) setPreviewUrl(URL.createObjectURL(file));
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
             {isServicoGeral && (
               <>
                 <Field label="Nome do serviço">
@@ -3864,7 +4161,7 @@ function Editor({
                 </div>
               </>
             )}
-            {!isCompany && !isLotacao && !isPlace && !isService && !isCityPlace && !isTour && !isHistoria && !isAssinatura && !isServicoGeral && !isShow && (
+            {!isCompany && !isLotacao && !isPlace && !isLocadora && !isService && !isCityPlace && !isTour && !isHistoria && !isAssinatura && !isServicoGeral && !isShow && (
               <>
                 <Field label="Nome">
                   <Input
