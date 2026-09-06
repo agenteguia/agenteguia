@@ -4,7 +4,7 @@ import {
   Waves, Umbrella, UtensilsCrossed, Coffee, BedDouble, Hotel, Martini, Wine, Beer,
   TreePine, Leaf, Mountain, Wrench, ConciergeBell, ShoppingBag, Camera, Music,
   Ship, Anchor, Car, Bike, Sun, Fish, PartyPopper, Store, Backpack, Tent, HelpCircle,
-  Stethoscope, KeyRound,
+  Stethoscope, KeyRound, Gauge,
 } from "lucide-react";
 
 // Registro de icones pra categoria — trocado de emoji livre (dificil de manter consistente
@@ -75,8 +75,9 @@ const PAGE_META = {
   Shows: { label: "Shows", singular: "Show", Icon: Music },
   Categorias: { label: "Categorias", singular: "Categoria", Icon: Tag },
   Assinantes: { label: "Assinantes", singular: "Assinatura", Icon: CreditCard },
+  Consumo: { label: "Consumo", singular: "Consumo", Icon: Gauge },
 };
-const nav = ["Empresas", "LotacaoParcerias", "Locais", "Locadoras", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Shows", "Categorias", "Assinantes"];
+const nav = ["Empresas", "LotacaoParcerias", "Locais", "Locadoras", "ServicosLocais", "LocaisCidade", "EmpresasTurismo", "HistoriasCidade", "ServicosGerais", "Shows", "Categorias", "Assinantes", "Consumo"];
 const emptyData = { categorias: [], empresas: [], lotacaoParcerias: [], locais: [], fotos: [], locadoras: [], servicos: [], locaisCidade: [], passeios: [], fotosPasseios: [], historias: [], fotosHistorias: [], assinaturas: [], turistas: [], planos: [], servicosGerais: [], shows: [] };
 
 function gerarSlug(nome) {
@@ -1273,6 +1274,10 @@ export default function App() {
           </div>
         </header>
         <section className="content">
+          {page === "Consumo" ? (
+            <ConsumoPanel />
+          ) : (
+          <>
           <div className="title-row">
             <div>
               <h1>{PAGE_META[page].label}</h1>
@@ -1472,6 +1477,8 @@ export default function App() {
               onDelete={(record) => deleteRecord(record)}
             />
           </section>
+          </>
+          )}
         </section>
       </main>
       {modal && (
@@ -1513,6 +1520,114 @@ export default function App() {
           {notice.type === "error" ? "!" : "✓"} {notice.message}
         </div>
       )}
+    </div>
+  );
+}
+
+// Monitoramento de Consumo (06/09) — pedido do Sr. Vitor: TPM/RPM/TPD da OpenAI (conta
+// AINDA compartilhada com outros projetos, vai virar dedicada do GUIA PORTO depois) +
+// uso do ElevenLabs, com barra de nivel. Diferente de todo o resto do painel, essa
+// pagina NAO e' CRUD (sem tabela, sem editor) — so' um dashboard read-only que busca de
+// um backend proprio (painel-empresas-api), nao do Supabase direto, porque as chaves de
+// admin da OpenAI/ElevenLabs nunca podem chegar no navegador.
+function BarraDeNivel({ label, usado, teto, detalhe }) {
+  const percentual = teto ? Math.min(100, Math.round((usado / teto) * 100)) : 0;
+  const cor = percentual >= 90 ? "#e5484d" : percentual >= 70 ? "#f5a623" : "#2f7d5c";
+  return (
+    <div className="consumo-metrica">
+      <div className="consumo-metrica-header">
+        <span>{label}</span>
+        <span>
+          {usado?.toLocaleString("pt-BR")} / {teto?.toLocaleString("pt-BR")} ({percentual}%)
+        </span>
+      </div>
+      <div className="consumo-barra-fundo">
+        <div className="consumo-barra-preenchida" style={{ width: `${percentual}%`, background: cor }} />
+      </div>
+      {detalhe && <small style={{ color: "#888" }}>{detalhe}</small>}
+    </div>
+  );
+}
+
+function ConsumoPanel() {
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState(null);
+
+  const carregar = useCallback(() => {
+    const url = import.meta.env.VITE_PAINEL_API_URL;
+    const token = import.meta.env.VITE_PAINEL_API_TOKEN;
+    if (!url) {
+      setErro("VITE_PAINEL_API_URL não configurada.");
+      return;
+    }
+    fetch(`${url}/api/consumo`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => r.json())
+      .then((data) => {
+        setDados(data);
+        setErro(null);
+      })
+      .catch((e) => setErro(e.message));
+  }, []);
+
+  useEffect(() => {
+    carregar();
+    // Atualiza sozinho a cada 30s — consumo muda ao longo do dia, sem precisar
+    // recarregar a página pra ver número mais recente.
+    const intervalo = setInterval(carregar, 30_000);
+    return () => clearInterval(intervalo);
+  }, [carregar]);
+
+  if (erro) return <div className="empty">Não foi possível carregar o consumo: {erro}</div>;
+  if (!dados) return <div className="empty">Carregando consumo...</div>;
+
+  const { openai, elevenlabs } = dados;
+
+  return (
+    <div className="consumo-panel">
+      <div className="consumo-bloco">
+        <h3>OpenAI</h3>
+        <p className="photos-hint">
+          Conta ainda compartilhada com outros projetos — vira conta dedicada do Guia Porto depois.
+        </p>
+        {openai?.tpm && (
+          <BarraDeNivel
+            label="TPM — tokens por minuto"
+            usado={openai.tpm.usado}
+            teto={openai.tpm.teto}
+            detalhe={`Atualizado em ${new Date(openai.tpm.atualizado_em).toLocaleTimeString("pt-BR")} (última mensagem respondida)`}
+          />
+        )}
+        {openai?.rpm && (
+          <BarraDeNivel label="RPM — requisições por minuto" usado={openai.rpm.usado} teto={openai.rpm.teto} />
+        )}
+        {openai?.tpd?.erro ? (
+          <div className="consumo-metrica">
+            <small style={{ color: "#e5484d" }}>TPD indisponível: {openai.tpd.erro}</small>
+          </div>
+        ) : openai?.tpd ? (
+          <BarraDeNivel
+            label="TPD — tokens hoje"
+            usado={openai.tpd.usado}
+            teto={openai.tpd.teto}
+            detalhe={`${openai.tpd.requests_hoje} chamadas ao modelo hoje`}
+          />
+        ) : null}
+      </div>
+      <div className="consumo-bloco">
+        <h3>ElevenLabs (voz)</h3>
+        {elevenlabs?.erro ? (
+          <div className="consumo-metrica">
+            <small style={{ color: "#e5484d" }}>Indisponível: {elevenlabs.erro}</small>
+          </div>
+        ) : elevenlabs ? (
+          <BarraDeNivel
+            label="Caracteres no período"
+            usado={elevenlabs.caracteres_usados}
+            teto={elevenlabs.caracteres_limite}
+            detalhe={elevenlabs.proximo_reset ? `Renova em ${new Date(elevenlabs.proximo_reset).toLocaleDateString("pt-BR")}` : null}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
