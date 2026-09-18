@@ -4,7 +4,7 @@ import {
   Waves, Umbrella, UtensilsCrossed, Coffee, BedDouble, Hotel, Martini, Wine, Beer,
   TreePine, Leaf, Mountain, Wrench, ConciergeBell, ShoppingBag, Camera, Music,
   Ship, Anchor, Car, Bike, Sun, Fish, PartyPopper, Store, Backpack, Tent, HelpCircle,
-  Stethoscope, KeyRound, Gauge,
+  Stethoscope, KeyRound, Gauge, Eye, EyeOff,
 } from "lucide-react";
 
 // Registro de icones pra categoria — trocado de emoji livre (dificil de manter consistente
@@ -218,9 +218,10 @@ export default function App() {
   const [page, setPage] = useState("Empresas");
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("Todas");
-  const [cityFilter, setCityFilter] = useState("Todas");
-  const [vehicleFilter, setVehicleFilter] = useState("Todas");
+  const [categoryFilter, setCategoryFilter] = useState(["Todas"]);
+  const [cityFilter, setCityFilter] = useState(["Todas"]);
+  const [vehicleFilter, setVehicleFilter] = useState(["Todas"]);
+  const [photoFilter, setPhotoFilter] = useState(["Todas"]);
   const [modal, setModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -232,6 +233,17 @@ export default function App() {
     // Erro fica mais tempo na tela — 4.2s some rápido demais quando o aviso é sobre
     // algo importante nao ter subido (ex.: foto), e a pessoa nao percebe a tempo.
     window.setTimeout(() => setNotice(null), type === "error" ? 11000 : 4200);
+  };
+  const toggleFilter = (setFilter, value) => {
+    setFilter((selected) => {
+      if (value === "Todas") return ["Todas"];
+      const next = selected.filter((item) => item !== "Todas");
+      const alreadySelected = next.includes(value);
+      const updated = alreadySelected
+        ? next.filter((item) => item !== value)
+        : [...next, value];
+      return updated.length ? updated : ["Todas"];
+    });
   };
   const fetchTudo = useCallback(
     () =>
@@ -370,6 +382,28 @@ export default function App() {
     if (session) loadData();
   }, [session, loadData]);
 
+  // Somente estes cadastros possuem galeria além da imagem de capa. Nos demais,
+  // "fotos extras" não aparece como opção para não sugerir uma funcionalidade que
+  // o formulário ainda não oferece.
+  const hasPhotoGallery = ["Empresas", "Locais", "EmpresasTurismo", "HistoriasCidade"].includes(page);
+  const photoInfoFor = useCallback((item) => {
+    const place = page === "Empresas"
+      ? data.locais.find((local) => local.empresa_id === item.id)
+      : item;
+    const extraPhotos =
+      page === "Empresas" || page === "Locais"
+        ? data.fotos.filter((photo) => photo.local_id === place?.id)
+        : page === "EmpresasTurismo"
+          ? data.fotosPasseios.filter((photo) => photo.passeio_id === item.id)
+          : page === "HistoriasCidade"
+            ? data.fotosHistorias.filter((photo) => photo.historia_id === item.id)
+            : null;
+    return {
+      hasCover: Boolean(place?.foto_capa_url),
+      extraCount: extraPhotos === null ? null : extraPhotos.length,
+    };
+  }, [data.fotos, data.fotosHistorias, data.fotosPasseios, data.locais, page]);
+
   const rows = useMemo(() => {
     const list =
       page === "Empresas"
@@ -411,8 +445,8 @@ export default function App() {
         page === "Assinantes" ||
         page === "ServicosGerais" ||
         page === "Shows" ||
-        categoryFilter === "Todas" ||
-        item.categoria_id === categoryFilter;
+        categoryFilter.includes("Todas") ||
+        categoryFilter.includes(item.categoria_id);
       const linkedPlace =
         page === "Empresas"
           ? data.locais.find((place) => place.empresa_id === item.id)
@@ -452,16 +486,25 @@ export default function App() {
       // filtro de cidade (com contagem) so se aplica nessas paginas.
       const cityMatches =
         (page !== "Locais" && page !== "LotacaoParcerias" && page !== "Shows") ||
-        cityFilter === "Todas" ||
-        (cityFilter === "Sem cidade" ? !item.cidade : item.cidade === cityFilter);
+        cityFilter.includes("Todas") ||
+        cityFilter.some((city) => city === "Sem cidade" ? !item.cidade : item.cidade === city);
       // Filtro de tipo de veiculo (Carro/Moto) — so existe em "LotacaoParcerias".
       const vehicleMatches =
         page !== "LotacaoParcerias" ||
-        vehicleFilter === "Todas" ||
-        (vehicleFilter === "Sem tipo" ? !item.tipo_veiculo : item.tipo_veiculo === vehicleFilter);
-      return categoryMatches && cityMatches && vehicleMatches && searchableNormalizado.includes(normalizedSearch);
+        vehicleFilter.includes("Todas") ||
+        vehicleFilter.some((vehicle) => vehicle === "Sem tipo" ? !item.tipo_veiculo : item.tipo_veiculo === vehicle);
+      const photoInfo = photoInfoFor(item);
+      const photoMatches =
+        photoFilter.includes("Todas") ||
+        photoFilter.some((filter) =>
+          (filter === "Com capa" && photoInfo.hasCover) ||
+          (filter === "Sem capa" && !photoInfo.hasCover) ||
+          (filter === "Com extras" && photoInfo.extraCount > 0) ||
+          (filter === "Sem extras" && photoInfo.extraCount === 0),
+        );
+      return categoryMatches && cityMatches && vehicleMatches && photoMatches && searchableNormalizado.includes(normalizedSearch);
     });
-  }, [data, page, search, categoryFilter, cityFilter, vehicleFilter]);
+  }, [data, page, search, categoryFilter, cityFilter, vehicleFilter, photoFilter, photoInfoFor]);
 
   // Contagem por cidade DENTRO da categoria selecionada (muda a lista de cidades e os
   // numeros quando troca de categoria) — so relevante pra "Locais".
@@ -477,7 +520,7 @@ export default function App() {
     }
     if (page !== "Locais") return [];
     const doCategoria = data.locais.filter(
-      (l) => categoryFilter === "Todas" || l.categoria_id === categoryFilter,
+      (l) => categoryFilter.includes("Todas") || categoryFilter.includes(l.categoria_id),
     );
     const counts = {};
     for (const l of doCategoria) {
@@ -517,6 +560,10 @@ export default function App() {
         "error",
       );
     setLoading(true);
+    // O seletor de imagens trabalha com arquivos, não com um input de URL. Sem
+    // esta preservação, uma edição que só adiciona fotos extras enviaria a capa
+    // como vazia e apagaria a URL já salva no banco.
+    const fotoCapaUrl = values.foto_capa_url || editingRecord?.foto_capa_url || null;
     let table;
     let payload;
     if (page === "Empresas") {
@@ -562,7 +609,7 @@ export default function App() {
         telefone: values.telefone || null,
         instagram: values.instagram || null,
         horario_funcionamento: values.horario_funcionamento || null,
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_google_maps: values.link_google_maps || null,
         tags: values.tags || null,
         slug_nome: slug,
@@ -589,7 +636,7 @@ export default function App() {
         valor: values.valor || null,
         horario_funcionamento: values.horario_funcionamento || null,
         telefone: values.telefone || null,
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
         // So gera o link curto se tiver um link_google_maps de verdade por tras — um
@@ -611,7 +658,7 @@ export default function App() {
         cidade: values.cidade || null,
         latitude: Number(values.latitude),
         longitude: Number(values.longitude),
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
         // So gera o link curto se tiver um link_google_maps de verdade por tras — um
@@ -634,7 +681,7 @@ export default function App() {
         longitude: values.longitude ? Number(values.longitude) : null,
         telefone: values.telefone || null,
         horario_funcionamento: values.horario_funcionamento || null,
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
         // So gera o link curto se tiver um link_google_maps de verdade por tras — um
@@ -658,7 +705,7 @@ export default function App() {
         endereco: values.endereco || null,
         cidade: values.cidade || null,
         horario_funcionamento: values.horario_funcionamento || null,
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
         // So gera o link curto se tiver um link_google_maps de verdade por tras — um
@@ -692,7 +739,7 @@ export default function App() {
         telefone: values.telefone || null,
         instagram: values.instagram || null,
         horario_funcionamento: values.horario_funcionamento || null,
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_google_maps: values.link_google_maps || null,
         tags: values.tags || null,
         slug_nome: slug,
@@ -716,7 +763,7 @@ export default function App() {
         longitude: values.longitude ? Number(values.longitude) : null,
         telefone: values.telefone || null,
         horario_funcionamento: values.horario_funcionamento || null,
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
         // So gera o link curto se tiver um link_google_maps de verdade por tras — um
@@ -739,7 +786,7 @@ export default function App() {
         horario_funcionamento: values.horario_funcionamento || null,
         valor: values.valor || null,
         descricao: values.descricao || null,
-        foto_capa_url: values.foto_capa_url || null,
+        foto_capa_url: fotoCapaUrl,
         link_ingresso: values.link_ingresso || null,
         link_google_maps: values.link_google_maps || null,
         slug_nome: slug,
@@ -1207,6 +1254,19 @@ export default function App() {
   const pendentesAssinaturas = data.assinaturas.filter((x) => x.status === "pendente").length;
   const activeServicosGerais = data.servicosGerais.filter((x) => x.ativo).length;
   const activeLocadoras = data.locadoras.filter((x) => x.ativo).length;
+  const totalRecords =
+    page === "Empresas" ? data.empresas.length
+      : page === "LotacaoParcerias" ? data.lotacaoParcerias.length
+        : page === "Locais" ? data.locais.length
+          : page === "Locadoras" ? data.locadoras.length
+            : page === "ServicosLocais" ? data.servicos.length
+              : page === "LocaisCidade" ? data.locaisCidade.length
+                : page === "EmpresasTurismo" ? data.passeios.length
+                  : page === "HistoriasCidade" ? data.historias.length
+                    : page === "Assinantes" ? data.assinaturas.length
+                      : page === "ServicosGerais" ? data.servicosGerais.length
+                        : page === "Shows" ? data.shows.length
+                          : data.categorias.length;
   return (
     <div className="app-shell">
       <aside className={menuOpen ? "sidebar open" : "sidebar"}>
@@ -1237,8 +1297,10 @@ export default function App() {
                   setPage(key);
                   setMenuOpen(false);
                   setSearch("");
-                  setCategoryFilter("Todas");
-                  setCityFilter("Todas");
+                  setCategoryFilter(["Todas"]);
+                  setCityFilter(["Todas"]);
+                  setVehicleFilter(["Todas"]);
+                  setPhotoFilter(["Todas"]);
                 }}
               >
                 <Icon size={17} strokeWidth={2} />
@@ -1283,30 +1345,8 @@ export default function App() {
               <h1>{PAGE_META[page].label}</h1>
               <p>
                 {page === "Categorias"
-                  ? subtitle
-                  : `${(
-                      page === "Empresas"
-                        ? data.empresas
-                        : page === "LotacaoParcerias"
-                          ? data.lotacaoParcerias
-                          : page === "Locadoras"
-                          ? data.locadoras
-                          : page === "ServicosLocais"
-                          ? data.servicos
-                          : page === "LocaisCidade"
-                            ? data.locaisCidade
-                            : page === "EmpresasTurismo"
-                              ? data.passeios
-                              : page === "HistoriasCidade"
-                                ? data.historias
-                                : page === "Assinantes"
-                                  ? data.assinaturas
-                                  : page === "ServicosGerais"
-                                    ? data.servicosGerais
-                                    : page === "Shows"
-                                      ? data.shows
-                                      : data.locais
-                    ).length} no total`}
+                  ? `${subtitle} · ${rows.length} exibida${rows.length === 1 ? "" : "s"} de ${totalRecords}`
+                  : `${rows.length} exibido${rows.length === 1 ? "" : "s"} de ${totalRecords} no total`}
               </p>
             </div>
             <button
@@ -1402,23 +1442,23 @@ export default function App() {
                 <div className="category-filters">
                   <button
                     className={
-                      categoryFilter === "Todas"
+                      categoryFilter.includes("Todas")
                         ? "category-filter active"
                         : "category-filter"
                     }
-                    onClick={() => setCategoryFilter("Todas")}
+                    onClick={() => toggleFilter(setCategoryFilter, "Todas")}
                   >
                     Todas
                   </button>
                   {data.categorias.map((category) => (
                     <button
                       className={
-                        categoryFilter === category.id
+                        categoryFilter.includes(category.id)
                           ? "category-filter active"
                           : "category-filter"
                       }
                       key={category.id}
-                      onClick={() => setCategoryFilter(category.id)}
+                      onClick={() => toggleFilter(setCategoryFilter, category.id)}
                     >
                       <CategoryIcon name={category.icone} size={15} /> {category.nome}
                     </button>
@@ -1428,16 +1468,16 @@ export default function App() {
               {(page === "Locais" || page === "LotacaoParcerias" || page === "Shows") && cityCounts.length > 0 && (
                 <div className="city-filters">
                   <button
-                    className={cityFilter === "Todas" ? "category-filter active" : "category-filter"}
-                    onClick={() => setCityFilter("Todas")}
+                    className={cityFilter.includes("Todas") ? "category-filter active" : "category-filter"}
+                    onClick={() => toggleFilter(setCityFilter, "Todas")}
                   >
                     Todas as cidades ({cityCounts.reduce((soma, [, n]) => soma + n, 0)})
                   </button>
                   {cityCounts.map(([cidade, n]) => (
                     <button
                       key={cidade}
-                      className={cityFilter === cidade ? "category-filter active" : "category-filter"}
-                      onClick={() => setCityFilter(cidade)}
+                      className={cityFilter.includes(cidade) ? "category-filter active" : "category-filter"}
+                      onClick={() => toggleFilter(setCityFilter, cidade)}
                     >
                       {cidade} ({n})
                     </button>
@@ -1447,18 +1487,32 @@ export default function App() {
               {page === "LotacaoParcerias" && vehicleCounts.length > 0 && (
                 <div className="city-filters">
                   <button
-                    className={vehicleFilter === "Todas" ? "category-filter active" : "category-filter"}
-                    onClick={() => setVehicleFilter("Todas")}
+                    className={vehicleFilter.includes("Todas") ? "category-filter active" : "category-filter"}
+                    onClick={() => toggleFilter(setVehicleFilter, "Todas")}
                   >
                     Todos os veículos ({vehicleCounts.reduce((soma, [, n]) => soma + n, 0)})
                   </button>
                   {vehicleCounts.map(([tipo, n]) => (
                     <button
                       key={tipo}
-                      className={vehicleFilter === tipo ? "category-filter active" : "category-filter"}
-                      onClick={() => setVehicleFilter(tipo)}
+                      className={vehicleFilter.includes(tipo) ? "category-filter active" : "category-filter"}
+                      onClick={() => toggleFilter(setVehicleFilter, tipo)}
                     >
                       {tipo} ({n})
+                    </button>
+                  ))}
+                </div>
+              )}
+              {page !== "Categorias" && page !== "Assinantes" && (
+                <div className="photo-filters" aria-label="Filtrar por fotos">
+                  <span className="filter-label">Fotos:</span>
+                  {["Todas", "Com capa", "Sem capa", ...(hasPhotoGallery ? ["Com extras", "Sem extras"] : [])].map((filter) => (
+                    <button
+                      key={filter}
+                      className={photoFilter.includes(filter) ? "category-filter active" : "category-filter"}
+                      onClick={() => toggleFilter(setPhotoFilter, filter)}
+                    >
+                      {filter}
                     </button>
                   ))}
                 </div>
@@ -1469,6 +1523,7 @@ export default function App() {
               rows={rows}
               allPlaces={data.locais}
               allPhotos={data.fotos}
+              photoInfoFor={photoInfoFor}
               loading={loading}
               onEdit={(record) => {
                 setEditingRecord(record);
@@ -1632,7 +1687,22 @@ function ConsumoPanel() {
   );
 }
 
-function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete }) {
+function PhotoIndicators({ info }) {
+  return (
+    <span className="photo-indicators">
+      <span className={info.hasCover ? "photo-indicator yes" : "photo-indicator no"}>
+        {info.hasCover ? "Capa" : "Sem capa"}
+      </span>
+      {info.extraCount !== null && (
+        <span className={info.extraCount ? "photo-indicator yes" : "photo-indicator no"}>
+          {info.extraCount ? `+${info.extraCount} extra${info.extraCount > 1 ? "s" : ""}` : "Sem extras"}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, onEdit, onDelete }) {
   if (page === "Categorias")
     return rows.length ? (
       <div className="category-grid">
@@ -1706,9 +1776,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
       <div className="partner-grid">
         {rows.map((x) => {
           const place = allPlaces?.find((item) => item.empresa_id === x.id);
-          const photoCount = place
-            ? allPhotos?.filter((photo) => photo.local_id === place.id).length || 0
-            : 0;
+          const photoInfo = photoInfoFor(x);
           return (
             <article className="partner-card" key={x.id}>
               <div className="partner-image">
@@ -1729,10 +1797,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
                   {place?.descricao || "Empresa parceira do Guia Porto."}
                 </p>
                 <div className="partner-footer">
-                  <small>
-                    {photoCount}{" "}
-                    foto(s) extra
-                  </small>
+                  <PhotoIndicators info={photoInfo} />
                   <button
                     type="button"
                     className="edit-button"
@@ -1899,7 +1964,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
               <tr key={x.id}>
                 <td>
                   <b>{x.nome}</b>
-                  {x.foto_capa_url && <small>com foto</small>}
+                  <PhotoIndicators info={photoInfoFor(x)} />
                 </td>
                 <td>{x.nome_empresa || "—"}</td>
                 <td>{x.valor || "—"}</td>
@@ -1961,7 +2026,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
               <tr key={x.id}>
                 <td>
                   <b>{x.nome}</b>
-                  {x.foto_capa_url && <small>com foto</small>}
+                  <PhotoIndicators info={photoInfoFor(x)} />
                 </td>
                 <td>
                   {x.categoria ? <span className="pill">{x.categoria.replaceAll("_", " ")}</span> : "—"}
@@ -2367,6 +2432,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, loading, onEdit, onDelete
               <td>
                 <b>{x.nome_fantasia || x.nome}</b>
                 {company && <small>{x.cnpj}</small>}
+                {!company && <PhotoIndicators info={photoInfoFor(x)} />}
               </td>
               <td>
                 <span className="pill">
@@ -4380,6 +4446,7 @@ function Editor({
 
 function Login({ onError }) {
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
     if (!supabase)
@@ -4452,10 +4519,19 @@ function Login({ onError }) {
             <div className="password">
               <Input
                 name="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 required
                 placeholder="Sua senha"
               />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Ocultar senha" : "Visualizar senha"}
+                title={showPassword ? "Ocultar senha" : "Visualizar senha"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </Field>
           <div className="login-options">
