@@ -4,7 +4,7 @@ import {
   Waves, Umbrella, UtensilsCrossed, Coffee, BedDouble, Hotel, Martini, Wine, Beer,
   TreePine, Leaf, Mountain, Wrench, ConciergeBell, ShoppingBag, Camera, Music,
   Ship, Anchor, Car, Bike, Sun, Fish, PartyPopper, Store, Backpack, Tent, HelpCircle,
-  Stethoscope, KeyRound, Gauge, Eye, EyeOff,
+  Stethoscope, KeyRound, Gauge, Eye, EyeOff, ExternalLink,
 } from "lucide-react";
 
 // Registro de icones pra categoria — trocado de emoji livre (dificil de manter consistente
@@ -1702,6 +1702,22 @@ function PhotoIndicators({ info }) {
   );
 }
 
+function MapsLinkButton({ url }) {
+  if (!url) return null;
+  return (
+    <a
+      className="icon-button maps-link"
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Abrir no Google Maps"
+      aria-label="Abrir no Google Maps"
+    >
+      <ExternalLink size={15} />
+    </a>
+  );
+}
+
 function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, onEdit, onDelete }) {
   if (page === "Categorias")
     return rows.length ? (
@@ -1798,6 +1814,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </p>
                 <div className="partner-footer">
                   <PhotoIndicators info={photoInfo} />
+                  <MapsLinkButton url={place?.link_google_maps} />
                   <button
                     type="button"
                     className="edit-button"
@@ -1844,6 +1861,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -1911,6 +1929,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -1973,6 +1992,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -2040,6 +2060,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -2109,6 +2130,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -2181,6 +2203,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -2246,6 +2269,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -2311,6 +2335,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 </td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -2376,6 +2401,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
                 <td>{x.fim_em ? new Date(x.fim_em).toLocaleDateString("pt-BR") : "—"}</td>
                 <td>
                   <div className="row-actions">
+                    <MapsLinkButton url={x.link_google_maps} />
                     <button
                       type="button"
                       className="icon-button edit"
@@ -2454,6 +2480,7 @@ function DataTable({ page, rows, allPlaces, allPhotos, photoInfoFor, loading, on
               </td>
               <td>
                 <div className="row-actions">
+                  <MapsLinkButton url={x.link_google_maps} />
                   <button
                     type="button"
                     className="icon-button edit"
